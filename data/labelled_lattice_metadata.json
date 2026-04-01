@@ -1,0 +1,183 @@
+{
+  "file": "labelled_lattice.geojson",
+  "description": "900-cell grid over the Boston study area. Each cell carries satellite-derived environmental predictors, street-view-derived urban morphology predictors, and spatially interpolated sensor readings (temperature and PM2.5) produced by a ridge-regression + ordinary-kriging pipeline.",
+  "crs": "EPSG:26986  (NAD83 / Massachusetts Mainland, metres)",
+  "grid": {
+    "source": "data/spatial/grid_rectangles.geojson",
+    "n_cells": 900,
+    "cell_id_column": "cell_id",
+    "note": "Integer 0-based index; the same id is used in every layer file."
+  },
+
+  "columns": {
+
+    "satellite_predictors": {
+      "note": "All satellite and census layers were extracted to the same 900-cell grid using the extractors in src/data_extraction/. Cells are assigned the area-weighted median of the raster pixels that overlap the cell.",
+      "ndvi": {
+        "label": "NDVI (Normalized Difference Vegetation Index)",
+        "source": "Sentinel-2 Level-2A via Microsoft Planetary Computer STAC API",
+        "date_range": "2025-05-01 / 2025-09-30",
+        "method": "Median composite (cloud cover ≤ 20 %, up to 24 items). NDVI = (NIR − Red) / (NIR + Red). Aggregated to grid cells by median pixel value.",
+        "units": "dimensionless [-1, 1]"
+      },
+      "ndbi": {
+        "label": "NDBI (Normalized Difference Built-Up Index)",
+        "source": "Landsat Collection 2 Level-2A via Microsoft Planetary Computer STAC API",
+        "date_range": "2025-05-01 / 2025-09-30",
+        "method": "Median composite (cloud cover ≤ 20 %, up to 30 items). NDBI = (SWIR − NIR) / (SWIR + NIR). Aggregated to grid cells by median pixel value.",
+        "units": "dimensionless [-1, 1]"
+      },
+      "impervious_pct": {
+        "label": "NLCD impervious surface fraction",
+        "source": "NLCD Annual Fractional Impervious Surface (Annual_NLCD_FctImp_2024_CU_C1V1.zip)",
+        "date_range": "Annual product for year 2024",
+        "method": "Local raster file resampled and aggregated to grid cells by mean pixel value.",
+        "units": "percent [0, 100]"
+      },
+      "road_density_km_km2": {
+        "label": "Total road density",
+        "source": "U.S. Census TIGER/Line 2024 roads for Suffolk County, MA (downloaded via TIGER FTP)",
+        "date_range": "TIGER 2024 vintage",
+        "method": "Total road-segment length clipped to each cell divided by cell area.",
+        "units": "km of road per km²"
+      },
+      "major_road_density_km_km2": {
+        "label": "Major road density",
+        "source": "Same as road_density_km_km2",
+        "date_range": "TIGER 2024 vintage",
+        "method": "Restricted to MTFCC codes S1100 (primary roads) and S1200 (secondary roads).",
+        "units": "km of road per km²",
+        "note": "Sparse — 789 of 900 cells have no major roads within them."
+      },
+      "population_density_km2": {
+        "label": "Population density",
+        "source": "U.S. Census ACS 5-year estimates 2023, block-group geography (TIGER/Line 2025 block-group boundaries tl_2025_25_bg.zip)",
+        "date_range": "ACS 2019-2023 (5-year estimates, released 2024)",
+        "method": "Block-group total population (B01003_001E) area-weighted to grid cells.",
+        "units": "people per km²"
+      },
+      "nei_emissions_tpy": {
+        "label": "Total EPA NEI emissions (point + area)",
+        "source": "EPA 2020 National Emissions Inventory — facility-level process-by-region summary (2020nei_facility_process_byregions.zip)",
+        "date_range": "2020 NEI inventory year",
+        "method": "Point sources located inside each cell are summed. Only cells with at least one facility have non-null values (9 of 900 cells).",
+        "units": "short tons per year",
+        "note": "Most cells in this urban grid are null because EPA NEI point sources are sparse."
+      },
+      "nei_point_emissions_tpy": {
+        "label": "EPA NEI point-source emissions",
+        "source": "Same as nei_emissions_tpy",
+        "units": "short tons per year"
+      },
+      "nei_area_emissions_tpy": {
+        "label": "EPA NEI area-source emissions",
+        "source": "Same as nei_emissions_tpy",
+        "units": "short tons per year",
+        "note": "All 900 cells are null — the 2020 NEI file used does not contain area-source entries for this study area."
+      }
+    },
+
+    "street_view_predictors": {
+      "note": "All street-view metrics were extracted from Google Street View panoramas collected along the street network inside the bounding box. Images were analysed with deep-learning models from the alivestreets library. Values are aggregated per grid cell as a length-weighted mean over all street segments within the cell.",
+      "data_location": "data/kriging_street_view/grid_aggregated_*.geojson",
+      "image_collection_location": "data/kriging_street_view/streetview_images/",
+      "image_collection_date": "approximately January 2025",
+      "n_cells_with_data": 857,
+      "n_cells_null": 43,
+      "null_reason": "43 cells contain no sampled street segments (water, parks, or outside network coverage).",
+      "gvi_mean": {
+        "label": "Green View Index — mean",
+        "method": "Fraction of image pixels classified as vegetation by a semantic segmentation model (GVIFeatureExtractor). Two panorama views per point; GVI = mean of both. Length-weighted mean over all segments in the cell.",
+        "units": "dimensionless [0, 1]"
+      },
+      "gvi_median": { "label": "Green View Index — median", "units": "dimensionless [0, 1]" },
+      "gvi_std":    { "label": "Green View Index — std. dev.", "units": "dimensionless [0, 1]" },
+      "facade_area_mean": {
+        "label": "Facade area — mean",
+        "method": "Fraction of image pixels classified as building facade. Length-weighted mean per cell.",
+        "units": "dimensionless [0, 1]"
+      },
+      "facade_area_median": { "label": "Facade area — median", "units": "dimensionless [0, 1]" },
+      "facade_area_std":    { "label": "Facade area — std. dev.", "units": "dimensionless [0, 1]" },
+      "n_cars_mean": {
+        "label": "Car count — mean",
+        "method": "Number of cars detected in the panorama image by an object-detection model. Length-weighted mean per cell.",
+        "units": "count"
+      },
+      "n_cars_median": { "label": "Car count — median", "units": "count" },
+      "n_cars_std":    { "label": "Car count — std. dev.", "units": "count" },
+      "sky_ratio_mean": {
+        "label": "Sky ratio — mean",
+        "method": "Fraction of image pixels classified as sky. Length-weighted mean per cell.",
+        "units": "dimensionless [0, 1]"
+      },
+      "sky_ratio_median": { "label": "Sky ratio — median", "units": "dimensionless [0, 1]" },
+      "sky_ratio_std":    { "label": "Sky ratio — std. dev.", "units": "dimensionless [0, 1]" },
+      "road_ratio_mean": {
+        "label": "Road/pavement ratio — mean",
+        "method": "Fraction of image pixels classified as road or pavement. Length-weighted mean per cell.",
+        "units": "dimensionless [0, 1]"
+      },
+      "road_ratio_median": { "label": "Road/pavement ratio — median", "units": "dimensionless [0, 1]" },
+      "road_ratio_std":    { "label": "Road/pavement ratio — std. dev.", "units": "dimensionless [0, 1]" }
+    },
+
+    "interpolated_satellite": {
+      "note": "Produced by notebooks/kriging_layers/kriging_regression_temperature.ipynb and kriging_regression_pm25.ipynb using five Boston MOD-PM sensors.",
+      "sensors_used": [
+        "Boston Carter Field",
+        "Boston Gainsborough Parking Garage",
+        "Boston Robinson Hall",
+        "Boston West Village B",
+        "Boston World Series Way"
+      ],
+      "sensor_overlap_period": "2025-06-20 to 2026-01-04",
+      "measurement_time_window": "15:00 – 16:00 (local time); mean over all days in the overlap period",
+      "model": {
+        "step_1": "Ridge regression (L2 α=1.0) trained on sensor-point measurements. Predictors: ndvi, ndbi, impervious_pct (for temperature); ndvi, impervious_pct, road_density (log1p), nei_emissions (log1p), population_density (log1p) (for PM2.5). PM2.5 target log-transformed (log1p) before regression.",
+        "step_2": "Residuals (observed − ridge prediction) fitted with a spherical/exponential/Gaussian semivariogram (exhaustive parameter search). Ordinary kriging used to interpolate residuals to all 900 grid cells.",
+        "step_3": "Final map = ridge surface + kriged residuals. PM2.5 back-transformed with expm1."
+      },
+      "temperature_sat_ridge": {
+        "label": "Temperature — ridge regression surface (°C)",
+        "units": "°C"
+      },
+      "temperature_sat_kriging_correction": {
+        "label": "Temperature — kriging correction term (°C)",
+        "units": "°C"
+      },
+      "temperature_sat": {
+        "label": "Temperature — final (ridge + kriging) (°C)",
+        "units": "°C"
+      },
+      "pm25_sat_ridge": {
+        "label": "PM2.5 — ridge regression surface (µg/m³, back-transformed)",
+        "units": "µg/m³"
+      },
+      "pm25_sat": {
+        "label": "PM2.5 — final (ridge + kriging) (µg/m³)",
+        "units": "µg/m³"
+      }
+    },
+
+    "interpolated_street_view": {
+      "note": "Produced by notebooks/kriging_street_view/kriging_regression_temperature.ipynb and kriging_regression_pm25.ipynb. Columns are NaN in this version because those notebooks have not yet been executed.",
+      "model": {
+        "step_1": "Same ridge + kriging pipeline as satellite model, but using street-view predictors: gvi_mean, facade_area_mean, n_cars_mean, sky_ratio_mean, road_ratio_mean.",
+        "step_2": "To populate these columns, run: notebooks/kriging_street_view/kriging_regression_temperature.ipynb and kriging_regression_pm25.ipynb, then re-run this merge."
+      },
+      "temperature_sv_ridge":               { "label": "Temperature — ridge surface (street-view predictors)", "units": "°C" },
+      "temperature_sv_kriging_correction":  { "label": "Temperature — kriging correction (street-view)", "units": "°C" },
+      "temperature_sv":                     { "label": "Temperature — final (street-view ridge + kriging)", "units": "°C" },
+      "pm25_sv_ridge":                      { "label": "PM2.5 — ridge surface (street-view predictors)", "units": "µg/m³" },
+      "pm25_sv":                            { "label": "PM2.5 — final (street-view ridge + kriging)", "units": "µg/m³" }
+    }
+  },
+
+  "how_to_regenerate": {
+    "step_1": "Run notebooks/kriging_layers/extraction.ipynb to re-extract satellite layers into data/kriging_satellite/layers/",
+    "step_2": "Run notebooks/kriging_layers/kriging_regression_temperature.ipynb and kriging_regression_pm25.ipynb to re-interpolate",
+    "step_3": "Run notebooks/kriging_street_view/kriging_regression_temperature.ipynb and kriging_regression_pm25.ipynb",
+    "step_4": "Re-run the merge script: src/build_labelled_lattice.py"
+  }
+}
