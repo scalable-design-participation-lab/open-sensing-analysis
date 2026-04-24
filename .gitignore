@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.python-version
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Street view images and per-point segmentation JSON (thousands of files)
+data/kriging_street_view/streetview_images/
+data/kriging_street_view/streetview_images 2/
+data/kriging_street_view/Images/
+data/kriging_street_view/built_environment/
+
+# Ignore plain .json (per-point results), but keep .geojson
+data/**/*.json
+!data/**/*.geojson
+
+# Large source downloads (re-downloadable)
+data/**/*.zip
+data/**/tl_2025_*_unzipped/
+data/**/Annual_NLCD_*/
+
+# Large model weights
+*.pt
+*.pth
+
+# Map output images (regenerable)
+data/**/*.png
+
+# Keep essential spatial data
+!data/**/*.geojson
+!data/**/*.tif
+!data/**/*.tiff
+!data/**/*.csv
+!data/**/*.gpkg
