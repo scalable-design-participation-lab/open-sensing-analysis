@@ -22,8 +22,11 @@ class DataExtractor(ABC):
     DEFAULT_GRID_PATH = Path("data/grid_rectangles.geojson")
 
     def __init__(self, grid_path: str | Path | None = None) -> None:
-        self.grid_path = Path(grid_path) if grid_path else self.DEFAULT_GRID_PATH
-
+        if(grid_path is not None):
+            self.grid_path = Path(grid_path)
+        else:
+            self.grid_path = self.DEFAULT_GRID_PATH
+    
     @property
     @abstractmethod
     def layer_name(self) -> str:
@@ -111,15 +114,27 @@ class DataExtractor(ABC):
     ) -> gpd.GeoDataFrame:
         """Clip a GeoDataFrame to the provided bbox."""
 
-        clip_crs = crs or (data.crs.to_string() if data.crs else None)
+        if(crs is not None):
+            clip_crs = crs
+        else:
+            if(data.crs is not None):
+                clip_crs = data.crs_tostring()
+            else:
+                clip_crs = None
+        #Convert the bbox (originally a tuple of 4 numbers) to GDF
         bbox_gdf = self.bbox_to_gdf(bbox, crs=clip_crs)
+
+        #Convert the bbox CRS to the data CRS if necessary
         if data.crs and bbox_gdf.crs and data.crs != bbox_gdf.crs:
             bbox_gdf = bbox_gdf.to_crs(data.crs)
+        
+        #Return the clipped data.
         return gpd.clip(data, bbox_gdf)
+
 
     def validate_bbox(self, bbox: BBox) -> BBox:
         """Validate bbox ordering before running any extraction."""
-
+        #Basic bbox validation.
         min_x, min_y, max_x, max_y = bbox
         if min_x >= max_x:
             raise ValueError("bbox min_x must be smaller than max_x")

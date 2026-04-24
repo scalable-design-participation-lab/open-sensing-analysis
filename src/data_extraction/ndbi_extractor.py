@@ -49,15 +49,18 @@ class NDBIExtractor(DataExtractor):
         Fetch Landsat data, compute median NDBI in the requested bbox,
         and return a pixel-level GeoDataFrame with one `ndbi` value per polygon.
         """
-
+        #Validate the bbox
         self.validate_bbox(bbox)
         target_crs = self.get_target_crs()
         if target_crs is None:
             raise ValueError("Grid CRS is missing; cannot request Landsat tiles.")
 
+        #Gets the EPSG code. 
         target_epsg = self._crs_to_epsg(target_crs)
+        #Gets bbox in lon lat.
         bbox_wgs84 = self._bbox_to_crs(bbox, source_crs=target_crs, target_crs="EPSG:4326")
 
+        #Tries to import the libraries we need.
         try:
             import planetary_computer as pc
             import pystac_client
@@ -85,10 +88,16 @@ class NDBIExtractor(DataExtractor):
                 "No Landsat items found for bbox "
                 f"{bbox_wgs84} and datetime range {self.datetime_range}."
             )
-
+        #Get the band names.
         swir_asset, nir_asset = self._resolve_assets(items)
+
+        #The resolution that will be required.
         request_resolution = self._request_resolution()
 
+        
+        #stackstac basically is able to take the original items and 
+        #stack them in a spatial grid. In this case we are interested purely
+        #in the two bands that are needed to calculate NDBI, which are: nir and swir
         data_cube = stackstac.stack(
             items,
             assets=[nir_asset, swir_asset],
@@ -108,8 +117,9 @@ class NDBIExtractor(DataExtractor):
         swir = (swir_raw * self._sr_scale) + self._sr_offset
 
         ndbi_stack = (swir - nir) / (swir + nir + self._eps)
+        #Obtain the data as array
         ndbi = ndbi_stack.median(dim="time", skipna=True).compute()
-
+        
         return self._array_to_pixel_gdf(ndbi, crs=target_crs)
 
     def align_to_grid(
@@ -156,7 +166,7 @@ class NDBIExtractor(DataExtractor):
         """
 
         asset_keys = set(items[0].assets.keys())
-
+        #Possible band names.
         candidates = [
             ("swir16", "nir08"),
             ("SR_B6", "SR_B5"),

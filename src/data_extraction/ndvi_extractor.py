@@ -17,6 +17,7 @@ class NDVIExtractor(DataExtractor):
     Extract NDVI for a bounding box using Sentinel-2 L2A STAC items.
     """
 
+    #This is completely analogous to NDBI but we use distinct bands.
     STAC_API_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
     COLLECTION_ID = "sentinel-2-l2a"
 
