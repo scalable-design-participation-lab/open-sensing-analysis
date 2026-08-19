@@ -9,7 +9,7 @@ import numpy as np
 from pyproj import Transformer
 from shapely.geometry import box
 
-from data_extract import BBox, DataExtractor
+from .data_extract import BBox, DataExtractor
 
 
 class NLCDImperviousExtractor(DataExtractor):

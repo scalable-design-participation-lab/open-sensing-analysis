@@ -9,7 +9,7 @@ import numpy as np
 from pyproj import CRS
 from shapely.geometry import box
 
-from data_extract import BBox, DataExtractor
+from .data_extract import BBox, DataExtractor
 
 
 class NDVIExtractor(DataExtractor):
@@ -27,12 +27,14 @@ class NDVIExtractor(DataExtractor):
         max_cloud_cover: float = 20.0,
         max_items: int = 24,
         grid_path: str | Path | None = None,
+        resolution: float | None = None,
     ) -> None:
         super().__init__(grid_path=grid_path)
         self.datetime_range = datetime_range or self._default_datetime_range()
         self.max_cloud_cover = max_cloud_cover
         self.max_items = max_items
         self._eps = 1e-9
+        self._resolution = resolution
 
     @property
     def layer_name(self) -> str:
@@ -144,6 +146,8 @@ class NDVIExtractor(DataExtractor):
         return out
 
     def _request_resolution(self) -> float:
+        if self._resolution is not None:
+            return self._resolution
         cell_width, cell_height = self.get_target_resolution()
         return max(10.0, min(cell_width, cell_height))
 

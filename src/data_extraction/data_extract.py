@@ -118,7 +118,7 @@ class DataExtractor(ABC):
             clip_crs = crs
         else:
             if(data.crs is not None):
-                clip_crs = data.crs_tostring()
+                clip_crs = data.crs.to_string()
             else:
                 clip_crs = None
         #Convert the bbox (originally a tuple of 4 numbers) to GDF

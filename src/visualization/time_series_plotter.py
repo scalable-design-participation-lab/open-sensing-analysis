@@ -22,33 +22,39 @@ class TimeSeriesPlotter:
              x_label: str = "Time",
              y_labels: List[str] = None,
              titles: List[str] = None,
+             rotate_date_labels: bool = False,
+             show_in_same_plot: bool = False,
+             labels: List[str] = None,
+             show_legend: bool = True,
              )-> plt.Axes:
-        """
-        Docstring for plot
-        
-        :param self: Description
-        :param ax: Description
-        :param time_axis_data: Description
-        :type time_axis_data: List[datetime] | List[float]
-        :param time_series_data: Description
-        :type time_series_data: List[List[float]]
-        :param arrangement: Description
-        :type arrangement: str
-        :param max_plots_per_row: Description
-        :type max_plots_per_row: int
-        :param row_spacing: Description
-        :type row_spacing: float
-        :param row_width: Description
-        :type row_width: float
-        :param graph_height: Description
-        :type graph_height: float
-        """
 
         num_plots = len(time_series_data)
         if y_labels is None or len(y_labels) != num_plots:
             y_label = "Value"
         if num_plots == 0:
             raise ValueError("time_series_data must contain at least one series.")
+
+        label_rotation = 90 if rotate_date_labels else 0
+
+        if show_in_same_plot:
+            fig, ax = plt.subplots(figsize=(row_width, graph_height))
+            color_cycle = cycle(colors)
+            for i, time_series in enumerate(time_series_data):
+                if labels and i < len(labels):
+                    series_label = labels[i]
+                elif y_labels and i < len(y_labels):
+                    series_label = y_labels[i]
+                else:
+                    series_label = f"Series {i}"
+                ax.plot(time_axis_data, time_series, color=next(color_cycle), label=series_label)
+            ax.set_xlabel(x_label)
+            ax.set_ylabel(y_labels[0] if y_labels and len(y_labels) == 1 else "Value")
+            if titles:
+                ax.set_title(titles[0])
+            if show_legend:
+                ax.legend()
+            plt.setp(ax.get_xticklabels(), rotation=label_rotation, ha="right" if rotate_date_labels else "center")
+            return ax
 
         if arrangement == "vertical":
             num_rows = num_plots
@@ -75,6 +81,7 @@ class TimeSeriesPlotter:
             ax.set_ylabel(y_label)
             if titles and i < len(titles):
                 ax.set_title(titles[i])
+            plt.setp(ax.get_xticklabels(), rotation=label_rotation, ha="right" if rotate_date_labels else "center")
 
         for j in range(num_plots, len(axes)):
             axes[j].set_visible(False)
