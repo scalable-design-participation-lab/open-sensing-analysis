@@ -1,0 +1,5 @@
+RUN_DIR = "/projects/scalable_design_participation_lab/open-sensing-built-env-counts-2026-09-17"
+SITES_DIR = RUN_DIR + "/data/sites"
+SLICES_DIR = RUN_DIR + "/data/slices"
+MODEL_PATH = RUN_DIR + "/models/facades_model.pt"
+LOCAL_PREFIX = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/2026_09_16_site_built_environment_comparison"

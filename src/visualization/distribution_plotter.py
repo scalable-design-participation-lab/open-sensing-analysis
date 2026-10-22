@@ -305,13 +305,20 @@ class DistributionPlotter:
 
             if values_on_top:
                 for bar in bars:
-                    y_text = bar.get_height() + delta
+                    height = bar.get_height()
+                    if height >= 0:
+                        y_text = height + delta
+                        vertical_alignment = "bottom"
+                    else:
+                        y_text = height - delta
+                        vertical_alignment = "top"
                     x_text = bar.get_x() + bar.get_width() / 2
                     ax.text(
                         x_text,
                         y_text,
-                        str(round(bar.get_height(), decimals)),
+                        str(round(height, decimals)),
                         ha="center",
+                        va=vertical_alignment,
                     )
 
         if add_dividers:

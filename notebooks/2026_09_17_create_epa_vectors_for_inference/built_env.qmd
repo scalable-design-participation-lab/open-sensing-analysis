@@ -1,0 +1,349 @@
+---
+title: "SVI analysis at the station locations"
+author: "Uriel Legaria"
+date: last-modified
+format: 
+    html:
+        theme: cosmo
+jupyter: python3
+---
+
+### Tagged Street Networks 
+
+```{python}
+
+import geopandas as gpd
+import cmcrameri.cm as cmc
+import matplotlib.pyplot as plt
+import contextily as cx
+
+WEST_VILLAGE_B_PATH = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/2026_09_17_create_epa_vectors_for_inference/tagged_networks/West_Village_B.geojson"
+WORLD_SERIES_WAY_PATH = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/2026_09_17_create_epa_vectors_for_inference/tagged_networks/World_Series_Way.geojson"
+VON_HILLERN_PATH = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/2026_09_17_create_epa_vectors_for_inference/tagged_networks/VON_HILLERN_ST.geojson"
+ROBINSON_HALL_PATH = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/2026_09_17_create_epa_vectors_for_inference/tagged_networks/Robinson_Hall.geojson"
+GAINSBOROUGH_PATH = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/2026_09_17_create_epa_vectors_for_inference/tagged_networks/Gainsborough_Parking_Garage.geojson"
+DUDLEY_SQUARE_PATH = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/2026_09_17_create_epa_vectors_for_inference/tagged_networks/DUDLEY_SQUARE_ROXBURY.geojson"
+CARTER_FIELD_OURS_PATH = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/2026_09_17_create_epa_vectors_for_inference/tagged_networks/Carter_Field.geojson"
+CARTER_FIELD_AMY_PATH = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/2026_09_17_create_epa_vectors_for_inference/tagged_networks/Carter_Field_—_2.geojson"
+
+
+gdf_west_village_b = gpd.read_file(WEST_VILLAGE_B_PATH)
+gdf_world_series_way = gpd.read_file(WORLD_SERIES_WAY_PATH)
+gdf_von_hillern = gpd.read_file(VON_HILLERN_PATH)
+gdf_robinson_hall = gpd.read_file(ROBINSON_HALL_PATH)
+gdf_gainsborough = gpd.read_file(GAINSBOROUGH_PATH)
+gdf_dudley_square = gpd.read_file(DUDLEY_SQUARE_PATH)
+gdf_carter_field_ours = gpd.read_file(CARTER_FIELD_OURS_PATH)
+gdf_carter_field_amy = gpd.read_file(CARTER_FIELD_AMY_PATH)
+
+street_network_dictionary = {
+    "West Village B": gdf_west_village_b,
+    "World Series Way":gdf_world_series_way,
+    "Von Hillern": gdf_von_hillern,
+    "Robinson Hall": gdf_robinson_hall,
+    "Gainsborough PG": gdf_gainsborough,
+    "Dudley Square": gdf_dudley_square,
+    "Carter Field (Ours)": gdf_carter_field_ours,
+    "Carter Field (Amy)": gdf_carter_field_amy
+}
+
+COLUMN_NAME = "gvi"
+
+fig, ax = plt.subplots(4, 2, figsize = (10, 20))
+axis_flat = ax.flat
+
+for ax, (sensor_name, gdf) in zip(axis_flat, street_network_dictionary.items()):
+    gdf.plot(ax = ax, column = COLUMN_NAME, cmap = cmc.hawaii, legend = True)
+    ax.set_title(sensor_name+"—"+COLUMN_NAME)
+    ax.set_axis_off()
+
+    cx.add_basemap(ax, crs = gdf.crs, source=cx.providers.Esri.WorldImagery, alpha = 0.7)
+```
+
+Let's see an example of the network data:
+```{python}
+street_network_dictionary["West Village B"].head()
+```
+
+
+### Loading the sensor data
+
+First I am going to show the raw data (without alignment). This raw data is not yet comparable. 
+
+```{python}
+import pandas as pd
+from pathlib import Path
+import typing 
+from typing import List
+import datetime
+from enum import Enum
+
+class EnvVariables(Enum):
+    TEMPERATURE = 0
+    HUMIDITY = 1
+    PM = 2
+
+class StationData:
+
+    def __init__(
+        self,
+        dates: List[datetime.datetime],
+        time_series_temp: List[float],
+        time_series_humidity:List[float],
+        time_series_pm:List[float],
+        station_name:str,
+        ):
+
+        self.dates = dates
+        self.time_series_temp = time_series_temp
+        self.time_series_humidity = time_series_humidity
+        self.time_series_pm = time_series_pm
+        self.station_name = station_name
+    
+
+    def get_variable(self, env_var:EnvVariables):
+        if(env_var == EnvVariables.TEMPERATURE):
+            return self.time_series_temp
+        elif(env_var == EnvVariables.HUMIDITY):
+            return self.time_series_humidity
+        elif(env_var == EnvVariables.PM):
+            return self.time_series_pm
+        else:
+            return None
+
+
+PARENT_PATH_EPA = Path("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/2026_08_26_sensor_comparisons/data")
+PARENT_PATH_SENSORS = Path("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/data/sensors")
+
+MIN_VALID_PM25 = 0.05
+MAX_VALID_PM25 = 200
+
+def convert_from_fahrenheit_to_celsius(value):
+    return (value - 32)*(5/9)
+
+epa_temperature_data = pd.read_csv(PARENT_PATH_EPA/"boston_temp_combined.csv")
+epa_pm25_data = pd.read_csv(PARENT_PATH_EPA/"boston_pm25_combined.csv")
+
+def load_epa_station(site_name, station_name):
+    temperature = epa_temperature_data[epa_temperature_data["site_name"] == site_name].groupby("date")["temp_f"].mean().map(convert_from_fahrenheit_to_celsius)
+    pm25 = epa_pm25_data[epa_pm25_data["site_name"] == site_name].groupby("date")["pm25"].mean()
+    station_df = pd.concat({"temperature": temperature, "pm25": pm25}, axis = 1).sort_index()
+
+    return StationData(
+        dates = list(pd.to_datetime(station_df.index)),
+        time_series_temp = list(station_df["temperature"]),
+        time_series_humidity = [float("nan")]*len(station_df),
+        time_series_pm = list(station_df["pm25"]),
+        station_name = station_name
+    )
+
+def load_sensor_station(file_name, station_name, temperature_column = "temperature", humidity_column = "relative_humidity"):
+    sensor_df = pd.read_csv(PARENT_PATH_SENSORS/file_name)
+
+    sensor_pm25 = pd.to_numeric(sensor_df["pm25"], errors = "coerce")
+    is_valid = (sensor_pm25 >= MIN_VALID_PM25) & (sensor_pm25 <= MAX_VALID_PM25)
+    n_low = int((sensor_pm25.notna() & (sensor_pm25 < MIN_VALID_PM25)).sum())
+    n_high = int((sensor_pm25.notna() & (sensor_pm25 > MAX_VALID_PM25)).sum())
+    print(f"{station_name}: dropped {n_low} samples below {MIN_VALID_PM25} and {n_high} above {MAX_VALID_PM25} ug/m3")
+
+    return StationData(
+        dates = list(pd.to_datetime(sensor_df["timestamp"], utc = True).dt.tz_convert(None)),
+
+        time_series_temp = list(pd.to_numeric(sensor_df[temperature_column], errors = "coerce")),
+
+        time_series_humidity = list(pd.to_numeric(sensor_df[humidity_column], errors = "coerce")),
+
+        time_series_pm = list(sensor_pm25.where(is_valid)),
+        station_name = station_name
+    )
+
+station_data_dictionary = {
+    "West Village B": load_sensor_station("boston_west_village_b/boston_west_village_b.csv", "West Village B"),
+    "World Series Way": load_sensor_station("boston_world_series_way/boston_world_series_way.csv", "World Series Way"),
+    "Von Hillern": load_epa_station("VON HILLERN ST", "Von Hillern"),
+    "Robinson Hall": load_sensor_station("boston_robinson_hall/boston_robinson_hall.csv", "Robinson Hall"),
+    "Gainsborough PG": load_sensor_station("boston_gainsborough_parking/boston_gainsborough_parking.csv", "Gainsborough PG"),
+    "Dudley Square": load_epa_station("DUDLEY SQUARE ROXBURY", "Dudley Square"),
+    "Carter Field (Ours)": load_sensor_station("boston_carter_field/boston_carter_field.csv", "Carter Field (Ours)"),
+    "Carter Field (Amy)": load_sensor_station("boston_carter_field_reference/MOD-00157-CarterField.csv", "Carter Field (Amy)", temperature_column = "temp", humidity_column = "rh")
+}
+
+VARIABLE_TO_SHOW = EnvVariables.TEMPERATURE
+COLOR = "#bf37bb"
+fig, ax = plt.subplots(4, 2, figsize = (14, 16))
+axis_flat = ax.flat
+
+
+for ax, (sensor_name, station_data) in zip(axis_flat, station_data_dictionary.items()):
+    ax.plot(station_data.dates, station_data.get_variable(VARIABLE_TO_SHOW), color = COLOR)
+    ax.set_title(sensor_name+"—"+VARIABLE_TO_SHOW.name)
+    ax.tick_params(axis = "x", labelrotation = 45)
+
+fig.tight_layout()
+
+```
+
+### Making the time series comparable
+To make the data comparable we need three conditions:
+
+1. Same sampling rate
+2. The series have to be aligned. 
+3. The dates that are compared should be the same. 
+
+We can use my `series_aligner` to align the series. 
+
+```{python}
+import sys
+
+sys.path.append("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/src/time_series")
+
+
+from series_aligner import align_sensor_series_from_list
+
+variable_column = VARIABLE_TO_SHOW.name.lower()
+station_dataframes = [
+    pd.DataFrame(
+        {"timestamp":station_data.dates,
+        variable_column: station_data.get_variable(VARIABLE_TO_SHOW)}
+    )
+    for station_data in station_data_dictionary.values()
+]
+
+aligned_df, info = align_sensor_series_from_list(
+    sensor_dataframes=station_dataframes,
+    variable_name = variable_column,
+    time_column="timestamp",
+    sensor_names = list(station_data_dictionary.keys()),
+    sampling_interval = "24h",
+    min_sensors = 8 
+)
+
+aligned_df.head(5)
+```
+
+### Investigating the relation between temperature and some features
+```{python}
+import pandas as pd
+
+#Define the class that will hold the built environment features. 
+class BuiltEnvironmentFeats:
+
+    def __init__(
+        self,
+        gvi,
+        facade_area,
+        n_cars,
+        sky_ratio,
+        road_ratio
+        ):
+
+        self.gvi = gvi
+        self.facade_area = facade_area
+        self.n_cars = n_cars
+        self.sky_ratio = sky_ratio
+        self.road_ratio = road_ratio
+
+
+def get_weighted_average(weights, values):
+    avg = 0
+    for i in range(0,len(weights)):
+        weight = weights[i]
+        value = values[i]
+        avg += weight*value
+    
+    return avg
+
+built_env_feats = {}
+
+for (key, gdf) in street_network_dictionary.items():
+    #The standard way to average is weighting by street. 
+    street_names = pd.unique(list(gdf["name"]))
+    lengths = [list(gdf[gdf["name"] == name]["length"])[0] for name in street_names]
+
+    entire_length = sum(lengths)
+    weights = [x/entire_length for x in lengths]
+
+    gvis = [list(gdf[gdf["name"] == name]["gvi"])[0] for name in street_names]
+
+    gvi = get_weighted_average(weights, gvis)
+
+    facade_areas = [list(gdf[gdf["name"] == name]["facade_area"])[0] for name in street_names]
+    facade_area = get_weighted_average(weights, facade_areas)
+
+    n_cars_list = [list(gdf[gdf["name"] == name]["n_cars"])[0] for name in street_names]
+    n_cars = get_weighted_average(weights, n_cars_list)
+
+    sky_ratios = [list(gdf[gdf["name"] == name]["sky_ratio"])[0] for name in street_names]
+    sky_ratio = get_weighted_average(weights, sky_ratios)
+
+    road_ratios = [list(gdf[gdf["name"] == name]["road_ratio"])[0] for name in street_names]
+    road_ratio = get_weighted_average(weights, road_ratios)
+
+    built_env_feats[key] = BuiltEnvironmentFeats(
+        gvi = gvi,
+        facade_area = facade_area,
+        n_cars = n_cars,
+        sky_ratio = sky_ratio,
+        road_ratio = road_ratio
+    )
+pd.DataFrame({key: vars(feats) for (key, feats) in built_env_feats.items()}).T
+```
+Let's now get some scatter plots showing each of the values against temperature.
+
+In the following I will reduce the names of the stations to declutter the plots:
+
+1. West Village B (WVB)
+2. World Series Way (WSW)
+3. Von Hillern (VH)
+4. Robinson Hall (RH)
+5. Gainsborough (PG)
+6. Dudley Square (DS)
+7. Carter Field Ours (CFO)
+8. Carter Field Amy (CFA)
+
+
+```{python}
+KEYS = list(street_network_dictionary.keys())
+RED_COLOR = "#d62728"
+
+temps = [aligned_df[key].mean() for key in KEYS]
+
+station_abbreviations = {
+    "West Village B": "WVB",
+    "World Series Way": "WSW",
+    "Von Hillern": "VH",
+    "Robinson Hall": "RH",
+    "Gainsborough PG": "PG",
+    "Dudley Square": "DS",
+    "Carter Field (Ours)": "CFO",
+    "Carter Field (Amy)": "CFA"
+}
+
+feature_names = ["gvi", "facade_area", "n_cars", "sky_ratio", "road_ratio"]
+feature_titles = ["GVI", "Facade area", "N. cars", "Sky ratio", "Road ratio"]
+feature_labels = [
+    "Green View Index (unitless)",
+    "Facade area ratio (unitless)",
+    "Number of cars",
+    "Sky ratio (unitless)",
+    "Road ratio (unitless)"
+]
+
+fig, ax = plt.subplots(3, 2, figsize = (12, 14))
+axis_flat = ax.flat
+
+for i in range(len(feature_names)):
+    values = [getattr(built_env_feats[key], feature_names[i]) for key in KEYS]
+    axis = axis_flat[i]
+    axis.scatter(values, temps, color = RED_COLOR)
+    for key, value, temp in zip(KEYS, values, temps):
+        axis.annotate(station_abbreviations[key], (value, temp), xytext = (5, 5), textcoords = "offset points")
+    axis.set_title(feature_titles[i]+" vs. Temperature")
+    axis.set_xlabel(feature_labels[i])
+    axis.set_ylabel("Mean temperature (Celsius)")
+
+axis_flat[len(feature_names)].set_axis_off()
+fig.tight_layout()
+
+```
+

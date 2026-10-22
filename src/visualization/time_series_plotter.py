@@ -10,6 +10,24 @@ class TimeSeriesPlotter:
     def __init__(self):
         self.colors = sns.color_palette("tab10")
 
+    @staticmethod
+    def _break_gaps(time_axis_data, time_series, max_gap):
+        """Insert a NaN wherever consecutive samples are separated by more than
+        max_gap, so matplotlib draws disconnected segments instead of bridging
+        the gap. max_gap is a timedelta for datetime axes, a float otherwise."""
+        if max_gap is None or len(time_axis_data) < 2:
+            return time_axis_data, time_series
+
+        x_out = [time_axis_data[0]]
+        y_out = [time_series[0]]
+        for previous_time, current_time, value in zip(time_axis_data, time_axis_data[1:], time_series[1:]):
+            if current_time - previous_time > max_gap:
+                x_out.append(previous_time)
+                y_out.append(float("nan"))
+            x_out.append(current_time)
+            y_out.append(value)
+        return x_out, y_out
+
     def plot(self,
              time_axis_data: List[datetime]| List[float],
              time_series_data:List[List[float]],
@@ -26,6 +44,8 @@ class TimeSeriesPlotter:
              show_in_same_plot: bool = False,
              labels: List[str] = None,
              show_legend: bool = True,
+             max_gap = None,
+             ax: plt.Axes = None,
              )-> plt.Axes:
 
         num_plots = len(time_series_data)
@@ -36,8 +56,12 @@ class TimeSeriesPlotter:
 
         label_rotation = 90 if rotate_date_labels else 0
 
+        if ax is not None and not show_in_same_plot:
+            raise ValueError("ax can only be used together with show_in_same_plot=True.")
+
         if show_in_same_plot:
-            fig, ax = plt.subplots(figsize=(row_width, graph_height))
+            if ax is None:
+                fig, ax = plt.subplots(figsize=(row_width, graph_height))
             color_cycle = cycle(colors)
             for i, time_series in enumerate(time_series_data):
                 if labels and i < len(labels):
@@ -46,7 +70,8 @@ class TimeSeriesPlotter:
                     series_label = y_labels[i]
                 else:
                     series_label = f"Series {i}"
-                ax.plot(time_axis_data, time_series, color=next(color_cycle), label=series_label)
+                x_plot, y_plot = self._break_gaps(time_axis_data, time_series, max_gap)
+                ax.plot(x_plot, y_plot, color=next(color_cycle), label=series_label)
             ax.set_xlabel(x_label)
             ax.set_ylabel(y_labels[0] if y_labels and len(y_labels) == 1 else "Value")
             if titles:
@@ -76,7 +101,8 @@ class TimeSeriesPlotter:
             if y_labels and i < len(y_labels):
                 y_label = y_labels[i]
             ax = axes[i]
-            ax.plot(time_axis_data, time_series, color=next(color_cycle))
+            x_plot, y_plot = self._break_gaps(time_axis_data, time_series, max_gap)
+            ax.plot(x_plot, y_plot, color=next(color_cycle))
             ax.set_xlabel(x_label)
             ax.set_ylabel(y_label)
             if titles and i < len(titles):

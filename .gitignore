@@ -41,3 +41,35 @@ data/**/*.png
 !data/**/*.tiff
 !data/**/*.csv
 !data/**/*.gpkg
+
+# 3D map exports with base64-embedded street view imagery (hundreds of MB, regenerable)
+data/**/visualizations/*.html
+
+# Generated project-graph view (regenerate with scripts/graph_view.py)
+project_graph.html
+
+# Raw EPA daily downloads (hundreds of MB, re-downloadable from EPA AQS)
+data/2026_08_26_sensor_comparisons/data/daily_*.csv
+
+# Street view imagery per site (thousands of files)
+data/2026_08_03_imagery_quality_assessment/**/*.jpg
+data/2026_09_16_site_built_environment_comparison/**/*.jpg
+
+# Notebook caches (regenerable)
+notebooks/**/cache/
+
+# Monterrey pipeline: participant names and home locations (not for a public repo)
+notebooks/monterrey_temp_hum/
+
+# Hardcoded Google Maps API key (move the key to .env before committing these)
+notebooks/2026_07_21_imagery_and_weather_station_data_exploration/imagery_exploration.ipynb
+notebooks/2026_07_21_imagery_and_weather_station_data_exploration/imagery_exploration_2.ipynb
+notebooks/2026_08_03_imagery_quality_assessment/imagery_quality_assessment.ipynb
+notebooks/2026_09_16_site_built_environment_comparison/svi_retrieval.ipynb
+PROJECT_GRAPH.md
+
+# Local secrets, editor settings and personal tools
+.env
+.vscode/
+scripts/time_ledger.py
+scripts/time_ledger_projects.json

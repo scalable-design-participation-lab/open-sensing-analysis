@@ -1,0 +1,397 @@
+---
+title: Model Inference at EPA stations
+author: Uriel Legaria
+date: 2026-10-21
+jupyter: open-sensing
+format: html
+---
+
+In this notebook I'll examine the residuals for the model trained with the sensor data at the EPA sensor locations. If our model is:
+
+\begin{equation}
+T = A\mathbf{x} + b + \epsilon
+\end{equation}
+
+we want to obtain:
+
+\begin{equation}
+\epsilon(\mathbf{x_{i}}) \quad i\in\{1,2\}
+\end{equation}
+
+where $i$ runs over the two EPA sensor locations. 
+
+```{python}
+#Import libraries
+from pathlib import Path
+import sys
+import numpy as np
+import pandas as pd
+import geopandas as gpd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from scipy import stats
+from src.time_series.series_aligner import align_sensor_series
+from src.kriging.ridge_regression import train_ridge, ridge_predict
+from src.kriging.variogram_training import fit_variogram_model, plot_variogram_fit, ordinary_kriging_predict
+import cmcrameri.cm as cmc
+import contextily as ctx
+from src.visualization.distribution_plotter import DistributionPlotter
+```
+
+### Open the satellite-derived layers.
+These have been precomputed, and were obtained using Google Earth Engine.
+
+Our satellite layers include:
+
+1. NDVI: Normalized Difference Vegetation Index.
+2. NDBI: Normalized Difference Built-Up Index.
+3. Impervious Surface (from LandSat).
+4. Road density (from TIGER).
+
+```{python}
+PROJECT_ROOT = Path("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis")
+
+DATA_DIR = PROJECT_ROOT/"data"
+
+LAYER_DIR = DATA_DIR/"kriging_satellite"/"layers"
+
+satellite_layer_paths = {
+    "ndvi": LAYER_DIR/"ndvi_grid.geojson",
+    "ndbi": LAYER_DIR/"ndbi_grid.geojson",
+    "impervious": LAYER_DIR/"nlcd_impervious_grid.geojson",
+    "road_density": LAYER_DIR/"road_density_grid.geojson"
+}
+
+#The layer names.
+names = list(satellite_layer_paths.keys())
+
+#Open the GDFs.
+satellite_gdfs = {name: gpd.read_file(satellite_layer_paths[name]) for name in names}
+
+fig, ax = plt.subplots(figsize = (6,6))
+satellite_gdfs["impervious"].plot(column = "impervious", cmap = cmc.hawaii, legend = True, ax = ax)
+ax.set_title("Impervious surface")
+```
+
+### Open the SVI derived layers
+Now let's open the SVI derive layers which include:
+
+1. GVI: Green View Index.
+2. Facade area.
+3. Number of cars.
+4. Sky ratio.
+5. Road ratio.
+
+```{python}
+SVI_DIR = DATA_DIR/"kriging_street_view"
+
+svi_layer_paths = {
+    "gvi": SVI_DIR/"grid_aggregated_gvi.geojson",
+    "facade_area": SVI_DIR/"grid_aggregated_facade_area.geojson",
+    "n_cars": SVI_DIR/"grid_aggregated_n_cars.geojson",
+    "sky_ratio": SVI_DIR/"grid_aggregated_sky_ratio.geojson",
+    "road_ratio": SVI_DIR/"grid_aggregated_road_ratio.geojson"
+}
+
+svi_names = list(svi_layer_paths.keys())
+
+svi_gdfs = {name: gpd.read_file(svi_layer_paths[name]) for name in svi_names}
+
+fig, ax = plt.subplots(figsize = (6,6))
+svi_gdfs["facade_area"].plot(column = "facade_area_mean", cmap = cmc.hawaii, legend = True, ax = ax)
+ax.set_title("Facade area")
+```
+
+### Load the sensor temperature data
+
+We will load and align the sensor temperature data. The temperatures that we will use are the average between 3pm and 4pm. 
+
+```{python}
+#Load the temperature data.
+SENSORS_DIR = DATA_DIR/"sensors"
+sensor_csvs_dirs = {
+    "Boston Carter Field": SENSORS_DIR/"boston_carter_field"/"boston_carter_field.csv",
+    "Boston Gainsborough Parking Garage": SENSORS_DIR/"boston_gainsborough_parking"/"boston_gainsborough_parking.csv",
+    "Boston Robinson Hall": SENSORS_DIR/"boston_robinson_hall"/"boston_robinson_hall.csv",
+    "Boston West Village B": SENSORS_DIR/"boston_west_village_b"/"boston_west_village_b.csv",
+    "Boston World Series Way": SENSORS_DIR/"boston_world_series_way"/"boston_world_series_way.csv"
+}
+
+names = list(sensor_csvs_dirs.keys())
+sensor_dfs = {
+    name:pd.read_csv(sensor_csvs_dirs[name]) for name in names
+}
+
+#Align temperatures.
+aligned_temperatures, _ = align_sensor_series(
+    sensor_dataframes = sensor_dfs,
+    variable_name = "temperature",
+    time_column = "timestamp",
+    sampling_interval = "1min",
+    timestamp_tolerance = "15min"
+)
+
+sensor_temperatures = aligned_temperatures.between_time("15:00", "16:00").mean(axis = 0)
+sensor_temperatures
+```
+
+### Open the sensor locations
+
+```{python}
+SENSOR_LOCATIONS_PATH = DATA_DIR/"spatial"/"sensor_locations.json"
+all_sensor_locations = pd.read_json(SENSOR_LOCATIONS_PATH)
+
+sensor_locations = all_sensor_locations[all_sensor_locations["sensor_name"].isin(names)].copy()
+#Attach temperature to the location.
+sensor_locations["temperature"] = sensor_locations["sensor_name"].map(sensor_temperatures)
+sensor_locations
+
+#Create a GDF
+gdf_sensors = gpd.GeoDataFrame(
+    sensor_locations,
+    geometry=gpd.points_from_xy(sensor_locations['longitude'], sensor_locations['latitude']),
+    crs='EPSG:4326',
+)
+
+fig, ax = plt.subplots(figsize = (6,6))
+gdf_sensors.plot(column = "temperature", cmap = cmc.hawaii, legend = True, ax = ax)
+ctx.add_basemap(ax, crs = gdf_sensors.crs, source = ctx.providers.Esri.WorldStreetMap, alpha = 0.5, attribution = False)
+```
+
+### Build one table with all the features
+
+Each layer is a separate file over the same 900 grid cells. We join them on the cell id, so each row is one cell and each column is one feature.
+
+```{python}
+satellite_columns = {
+    "ndvi": "ndvi",
+    "ndbi": "ndbi",
+    "impervious": "impervious",
+    "road_density": "road_density_km_km2"
+}
+
+svi_columns = {
+    "gvi": "gvi_mean",
+    "facade_area": "facade_area_mean",
+    "n_cars": "n_cars_mean",
+    "sky_ratio": "sky_ratio_mean",
+    "road_ratio": "road_ratio_mean"
+}
+
+#Base GDF.
+grid_features = satellite_gdfs["ndvi"][["id", "geometry"]].rename(columns = {"id": "grid_id"})
+
+#Merge it with the satellite gdfs at grid_id. 
+for name in satellite_columns:
+    column = satellite_columns[name]
+    layer = satellite_gdfs[name][["id", column]].rename(columns = {"id": "grid_id", column: name})
+    grid_features = grid_features.merge(layer, on = "grid_id", how = "left")
+
+#Now with the SVI columns
+for name in svi_columns:
+    column = svi_columns[name]
+    layer = svi_gdfs[name][["grid_id", column]].rename(columns = {column: name})
+    grid_features = grid_features.merge(layer, on = "grid_id", how = "left")
+
+grid_features
+```
+
+### Data preparation
+
+```{python}
+#Transform the two columns that use counts
+grid_features["road_density_log1p"] = np.log1p(grid_features["road_density"].clip(lower = 0))
+grid_features["cars_log1p"] = np.log1p(grid_features["n_cars"].clip(lower = 0))
+
+COLS_PCA = ["ndvi", "ndbi", 'road_density_log1p', 'gvi', 'cars_log1p']
+
+#Replaces nan values in the PCA variables for the median. 
+grid_features[COLS_PCA] = grid_features[COLS_PCA].fillna(grid_features[COLS_PCA].median())
+```
+
+### Apply PCA to the features
+
+```{python}
+#Apply PCA
+scaler = StandardScaler()
+pca = PCA(n_components=2)
+X_scaled = scaler.fit_transform(grid_features[COLS_PCA])
+X_pca = pca.fit_transform(X_scaled)
+grid_features["PC1"] = X_pca[:,0]
+grid_features["PC2"] = X_pca[:,1]
+
+#Let's plot a bar distribution showing the profiles of the two principal components. 
+loadings = []
+for i in range(len(COLS_PCA)):
+    loadings.append({
+        "x": ["PC1", "PC2"],
+        "y": pca.components_[:, i],
+        "color_bars": cmc.batlow(i/(len(COLS_PCA) - 1)),
+        "label": COLS_PCA[i]
+    })
+
+plotter = DistributionPlotter()
+ax = plotter.multi_distribution_plotter(
+    loadings,
+    width = 9,
+    height = 6,
+    title = "PCA loadings",
+    variable_name = "Loading",
+    values_on_top = True,
+    delta = 0.03,
+    decimals = 2
+)
+ax.axhline(0, color = "gray", linewidth = 1)
+```
+
+- **PC1** can be interpreted as the built environment, going from vegetated (negative NDVI) to constructions (positive ndbi).
+
+- **PC2** can be interpreted as roads. 
+
+### Train the ridge model + variogram
+
+These are the two ingredients that we need to apply a temperature prediction model with Kriging.
+
+
+```{python}
+#Join the sensor locations and the cells. 
+sensors_in_grid = gpd.sjoin(
+    gdf_sensors.to_crs(grid_features.crs),
+    grid_features,
+    how = "left",
+    predicate = "within"
+)
+
+ridge_model = train_ridge(
+    X = sensors_in_grid[["PC1", "PC2"]].to_numpy(dtype = float),
+    y = sensors_in_grid["temperature"],
+    alpha = 1,
+    fit_intercept = True
+)
+
+print(f"R2: {ridge_model['score_r2']:.3f}")
+print(f"Coefficients (PC1, PC2): {ridge_model['coefficients']}")
+print(f"Intercept: {ridge_model['intercept']:.3f}")
+
+n_samples = ridge_model["n_samples"]
+n_features = ridge_model["n_features"]
+r2 = ridge_model["score_r2"]
+f_statistic = (r2/n_features)/((1 - r2)/(n_samples - n_features - 1))
+p_value = stats.f.sf(f_statistic, n_features, n_samples - n_features - 1)
+print(f"F({n_features}, {n_samples - n_features - 1}) = {f_statistic:.3f}, p = {p_value:.3f}")
+```
+
+The p-value shows non-significance, because we don't have too many points. Now let's obtain the variogram.
+```{python}
+sensors_in_grid["ridge_prediction"] = ridge_predict(
+    ridge_model,
+    sensors_in_grid[["PC1", "PC2"]].to_numpy(dtype = float)
+)
+sensors_in_grid["residual"] = sensors_in_grid["temperature"] - sensors_in_grid["ridge_prediction"]
+
+residual_points = list(zip(sensors_in_grid.geometry.x, sensors_in_grid.geometry.y))
+residual_values = sensors_in_grid["residual"].tolist()
+
+variogram_model = fit_variogram_model(points = residual_points, values = residual_values)
+
+plot_variogram_fit(variogram_model)
+```
+
+### Getting the residuals at the two EPA sensor locations.
+```{python}
+EPA_VECTORS_PATH = DATA_DIR/"2026_09_17_create_epa_vectors_for_inference"/"epa_inference_vectors.csv"
+EPA_TEMPERATURE_PATH = DATA_DIR/"2026_08_26_sensor_comparisons"/"data"/"boston_temp_combined.csv"
+
+epa_stations = pd.read_csv(EPA_VECTORS_PATH)
+epa_stations["road_density_log1p"] = np.log1p(epa_stations["road_density_km_km2"].clip(lower = 0))
+epa_stations["cars_log1p"] = np.log1p(epa_stations["n_cars"].clip(lower = 0))
+
+X_epa_pca = pca.transform(scaler.transform(epa_stations[COLS_PCA]))
+epa_stations["PC1"] = X_epa_pca[:,0]
+epa_stations["PC2"] = X_epa_pca[:,1]
+
+fig, ax = plt.subplots(figsize = (6,6))
+station_colors = [cmc.batlow(0.2), cmc.batlow(0.7)]
+for i in range(len(epa_stations)):
+    pc1 = epa_stations["PC1"].iloc[i]
+    pc2 = epa_stations["PC2"].iloc[i]
+    ax.annotate(
+        "",
+        xy = (pc1, pc2),
+        xytext = (0, 0),
+        arrowprops = dict(arrowstyle = "->", color = station_colors[i], linewidth = 2)
+    )
+    ax.text(pc1, pc2 + 0.08, epa_stations["site_name"].iloc[i], color = station_colors[i], ha = "center")
+ax.axhline(0, color = "gray", linewidth = 0.5)
+ax.axvline(0, color = "gray", linewidth = 0.5)
+ax.set_xlim(-0.5, 2.5)
+ax.set_ylim(-0.5, 2.5)
+ax.set_xlabel("PCA1 (surfaces)")
+ax.set_ylabel("PCA2 (roads)")
+ax.set_title("EPA stations in the PCA space")
+
+epa_stations["ridge_prediction"] = ridge_predict(
+    ridge_model,
+    epa_stations[["PC1", "PC2"]].to_numpy(dtype = float)
+)
+
+epa_stations_projected = gpd.GeoDataFrame(
+    epa_stations,
+    geometry = gpd.points_from_xy(epa_stations["longitude"], epa_stations["latitude"]),
+    crs = "EPSG:4326"
+).to_crs(grid_features.crs)
+epa_points = list(zip(epa_stations_projected.geometry.x, epa_stations_projected.geometry.y))
+
+epa_stations["kriged_residual"] = ordinary_kriging_predict(
+    points = residual_points,
+    values = residual_values,
+    fit = variogram_model,
+    query_points = epa_points
+)
+epa_stations["prediction"] = epa_stations["ridge_prediction"] + epa_stations["kriged_residual"]
+```
+
+We see that Von Hillern we have more roads. Both are places with more impervious surfaces than vegetation. 
+
+```{python}
+training_days = aligned_temperatures.between_time("15:00", "16:00").index.normalize().unique().strftime("%Y-%m-%d")
+
+epa_temperatures = pd.read_csv(EPA_TEMPERATURE_PATH)
+epa_temperatures = epa_temperatures[epa_temperatures["date"].isin(training_days)].copy()
+epa_temperatures["daily_mean"] = (epa_temperatures["temp_f"] - 32)*5/9
+epa_temperatures["daily_max"] = (epa_temperatures["temp_max_f"] - 32)*5/9
+measured = epa_temperatures.groupby("site_name")[["daily_mean", "daily_max"]].mean()
+n_days = epa_temperatures.groupby("site_name")["date"].nunique()
+
+epa_stations["n_days"] = epa_stations["site_name"].map(n_days)
+epa_stations["measured_daily_mean"] = epa_stations["site_name"].map(measured["daily_mean"])
+epa_stations["measured_daily_max"] = epa_stations["site_name"].map(measured["daily_max"])
+epa_stations["residual_daily_mean"] = epa_stations["measured_daily_mean"] - epa_stations["prediction"]
+epa_stations["residual_daily_max"] = epa_stations["measured_daily_max"] - epa_stations["prediction"]
+
+epa_stations[["site_name", "n_days", "PC1", "PC2", "ridge_prediction", "kriged_residual", "prediction",
+              "measured_daily_mean", "residual_daily_mean",
+              "measured_daily_max", "residual_daily_max"]].round(2)
+```
+
+```{python}
+station_names = epa_stations["site_name"].str.title().tolist()
+temperature_bars = [
+    {"x": station_names, "y": epa_stations["prediction"].to_numpy(), "color_bars": cmc.batlow(0.2), "label": "Ridge + kriging prediction"},
+    {"x": station_names, "y": epa_stations["measured_daily_mean"].to_numpy(), "color_bars": cmc.batlow(0.55), "label": "EPA daily mean"},
+    {"x": station_names, "y": epa_stations["measured_daily_max"].to_numpy(), "color_bars": cmc.batlow(0.85), "label": "EPA daily max"}
+]
+
+ax = plotter.multi_distribution_plotter(
+    temperature_bars,
+    width = 9,
+    height = 6,
+    title = "Predicted and measured temperature at the EPA stations",
+    variable_name = "Temperature (°C)",
+    values_on_top = True,
+    delta = 0.3,
+    decimals = 1,
+    ylims = [0, 33]
+)
+```

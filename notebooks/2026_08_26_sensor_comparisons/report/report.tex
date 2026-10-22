@@ -1,0 +1,197 @@
+\documentclass[11pt]{article}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\definecolor{draculabg}{HTML}{282A36}
+\definecolor{draculafg}{HTML}{F8F8F2}
+\definecolor{draculacomment}{HTML}{6272A4}
+\definecolor{draculacyan}{HTML}{8BE9FD}
+\definecolor{draculagreen}{HTML}{50FA7B}
+\definecolor{draculaorange}{HTML}{FFB86C}
+\definecolor{draculapink}{HTML}{FF79C6}
+\definecolor{draculapurple}{HTML}{BD93F9}
+\definecolor{draculared}{HTML}{FF5555}
+\definecolor{draculayellow}{HTML}{F1FA8C}
+
+
+\title{Sensor comparison (EPA vs. ours)}
+\author{Uriel Legaria}
+\date{\today}
+
+
+\begin{document}
+\maketitle
+
+I present here the comparison of temperature and PM2.5 measurements made with our sensors and with two EPA Air Quality Sensors: one located in Dudley Square, Roxbury, and the second one located in Von Hillern St.  
+
+
+\section{Temperature}\label{sec:temperature_results}
+\subsection{Temp---Summary of $RMSE$ and correlation coefficients.}
+
+Figure \ref{fig:rmse_temp} shows the $RMSE$ values obtained for temperature, computed across all our sensors. Carter (ref) refers to Amy Mueller's team sensor which we had used for reference in previous stages of the project.  
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/temp_09_rmse.png}
+    \caption{$RMSE$ temperature values when comparing measurements from our sensors with those of the EPA Air Quality Sensors.}
+    \label{fig:rmse_temp}
+\end{figure}
+
+
+Figure \ref{fig:coeffs_temp} shows the correlation coefficients between the temperature measurements of our sensors and those made with the EPA Air Quality Sensors. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/temp_10_corr.png}
+    \caption{Correlation coefficients obtained between our sensors and the 2 reference AQS.}
+    \label{fig:coeffs_temp}
+\end{figure}
+
+\subsection{Temp---Carter Field (ours) vs. EPA}
+
+Figure \ref{fig:carter_ours_temp} shows the temperature time series comparison between our sensor in Carter Field and the EPA sensors. We have kept only dates when both of the sensors being compared collected data. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/temp_03_carter_field_ours_vs_epa.png}
+    \caption{Temperature time series comparison between our sensor in Carter Field and both EPA sensors.}
+    \label{fig:carter_ours_temp}
+\end{figure}
+
+
+\subsection{Temp---Carter Field (ref) vs. EPA}
+Figure \ref{fig:carter_mueller_temp} shows the temperature time series of Amy Mueller's sensor in Carter Field and both of the EPA sensors. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/temp_04_carter_field_ref_vs_epa.png}
+    \caption{Temperature time series comparison between Amy Mueller's sensor in Carter Field and both EPA sensors.}
+    \label{fig:carter_mueller_temp}
+\end{figure}
+
+\subsection{Temp---Robinson Hall vs. EPA}
+
+The temperature time series comparison for the sensor located in Robinson Hall is shown in Figure \ref{fig:robinson_hall_temp}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/temp_05_robinson_hall_vs_epa.png}
+    \caption{Temperature time series comparison for Robinson Hall.}
+    \label{fig:robinson_hall_temp}
+\end{figure}
+
+\subsection{Temp---Gainsborough Parking vs. EPA}
+
+Temperature time series comparison for the sensor located in Gainsborough Parking is shown in Figure \ref{fig:gainsborough_parking_temp}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/temp_06_gainsborough_parking_vs_epa.png}
+    \caption{Temperature time series comparison for Gainsborough Parking.}
+    \label{fig:gainsborough_parking_temp}
+\end{figure}
+
+\subsection{Temp---West Village B vs. EPA}
+Temperature time series comparison for the sensor located in West Village B is shown in Figure \ref{fig:west_village_b_temp}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/temp_07_west_village_b_vs_epa.png}
+    \caption{Temperature time series comparison for West Village B.}
+    \label{fig:west_village_b_temp}
+\end{figure}
+
+
+\subsection{Temp---World Series Way vs. EPA}
+Temperature time series comparison for the sensor located in World Series Way is shown in Figure \ref{fig:wsw_temp}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/temp_08_world_series_way_vs_epa.png}
+    \caption{Temperature time series comparison for World Series Way.}
+    \label{fig:wsw_temp}
+\end{figure}
+
+\section{PM2.5 results}\label{sec:pm25_results}
+\subsection{PM2.5---Summary of $RMSE$ and correlation coefficients}
+Figure \ref{fig:pm_rmse} shows the $RMSE$ values for PM2.5 across all of the sensors that we evaluated. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/pm25_09_rmse.png}
+    \caption{PM2.5 $RMSE$ results.}
+    \label{fig:pm_rmse}
+\end{figure}
+
+Figure \ref{fig:pm_coeffs} shows the correlation coefficients between the PM2.5 measurements of our sensors and those made with the EPA Air Quality Sensors. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/pm25_10_corr.png}
+    \caption{PM2.5 correlation coefficients obtained between our sensors and the 2 reference AQS.}
+    \label{fig:pm_coeffs}
+\end{figure}
+
+\subsection{PM2.5---Carter Field (ours) vs. EPA}
+PM2.5 time series comparison for our sensor in Carter Field is shown in Figure \ref{fig:carter_ours_pm}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/pm25_03_carter_field_ours_vs_epa.png}
+    \caption{PM2.5 time series comparison between our sensor in Carter Field and both EPA sensors.}
+    \label{fig:carter_ours_pm}
+\end{figure}
+
+\subsection{PM2.5---Carter Field (ref) vs. EPA}
+PM2.5 time series comparison for Amy Mueller's sensor in Carter Field is shown in Figure \ref{fig:carter_mueller_pm}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/pm25_04_carter_field_ref_vs_epa.png}
+    \caption{PM2.5 time series comparison between Amy Mueller's sensor in Carter Field and both EPA sensors.}
+    \label{fig:carter_mueller_pm}
+\end{figure}
+
+\subsection{PM2.5---Robinson Hall vs. EPA}
+PM2.5 time series comparison for the sensor located in Robinson Hall is shown in Figure \ref{fig:robinson_hall_pm}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/pm25_05_robinson_hall_vs_epa.png}
+    \caption{PM2.5 time series comparison for Robinson Hall.}
+    \label{fig:robinson_hall_pm}
+\end{figure}
+
+\subsection{PM2.5---Gainsborough Parking vs. EPA}
+PM2.5 time series comparison for the sensor located in Gainsborough Parking is shown in Figure \ref{fig:gainsborough_parking_pm}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/pm25_06_gainsborough_parking_vs_epa.png}
+    \caption{PM2.5 time series comparison for Gainsborough Parking.}
+    \label{fig:gainsborough_parking_pm}
+\end{figure}
+
+\subsection{PM2.5---West Village B vs. EPA}
+PM2.5 time series comparison for the sensor located in West Village B is shown in Figure \ref{fig:west_village_b_pm}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/pm25_07_west_village_b_vs_epa.png}
+    \caption{PM2.5 time series comparison for West Village B.}
+    \label{fig:west_village_b_pm}
+\end{figure}
+
+\subsection{PM2.5---World Series Way vs. EPA}
+PM2.5 time series comparison for the sensor located in World Series Way is shown in Figure \ref{fig:wsw_pm}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{Figures/pm25_08_world_series_way_vs_epa.png}
+    \caption{PM2.5 time series comparison for World Series Way.}
+    \label{fig:wsw_pm}
+\end{figure}
+
+\end{document}
+
