@@ -61,13 +61,6 @@ notebooks/**/cache/
 # Monterrey pipeline: participant names and home locations (not for a public repo)
 notebooks/monterrey_temp_hum/
 
-# Hardcoded Google Maps API key (move the key to .env before committing these)
-notebooks/2026_07_21_imagery_and_weather_station_data_exploration/imagery_exploration.ipynb
-notebooks/2026_07_21_imagery_and_weather_station_data_exploration/imagery_exploration_2.ipynb
-notebooks/2026_08_03_imagery_quality_assessment/imagery_quality_assessment.ipynb
-notebooks/2026_09_16_site_built_environment_comparison/svi_retrieval.ipynb
-PROJECT_GRAPH.md
-
 # Local secrets, editor settings and personal tools
 .env
 .vscode/
