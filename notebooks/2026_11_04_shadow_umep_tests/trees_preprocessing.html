@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Uriel Legaria">
+<meta name="dcterms.date" content="2026-11-04">
+
+<title>Tree data preprocessing</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="trees_preprocessing_files/libs/clipboard/clipboard.min.js"></script>
+<script src="trees_preprocessing_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="trees_preprocessing_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="trees_preprocessing_files/libs/quarto-html/popper.min.js"></script>
+<script src="trees_preprocessing_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="trees_preprocessing_files/libs/quarto-html/anchor.min.js"></script>
+<link href="trees_preprocessing_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="trees_preprocessing_files/libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="trees_preprocessing_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="trees_preprocessing_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="trees_preprocessing_files/libs/bootstrap/bootstrap-917079515d91bccb85b543faf8aa8bb6.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Tree data preprocessing</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Uriel Legaria </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">November 4, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>I obtained the data from https://data.boston.gov/dataset/bprd-trees</p>
+<section id="opening-the-data" class="level3">
+<h3 class="anchored" data-anchor-id="opening-the-data">Opening the data</h3>
+<div id="5be6c12f" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> geopandas <span class="im">as</span> gpd</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> cmcrameri.cm <span class="im">as</span> cmc</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> zipfile</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> urllib.request</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pathlib <span class="im">import</span> Path</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>TREE_DATA_PATH <span class="op">=</span> <span class="st">"/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/notebooks/2026_11_04_shadow_umep_tests/data/bprd_trees.geojson.json"</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>gdf_trees <span class="op">=</span> gpd.read_file(TREE_DATA_PATH)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>gdf_trees[<span class="st">"dbh"</span>] <span class="op">=</span> pd.to_numeric(gdf_trees[<span class="st">"dbh"</span>], errors <span class="op">=</span> <span class="st">"coerce"</span>) <span class="op">*</span> <span class="fl">2.54</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>gdf_trees <span class="op">=</span> gdf_trees[gdf_trees[<span class="st">"dbh"</span>] <span class="op">&gt;</span> <span class="dv">0</span>]</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>MIN_PERCENTILE <span class="op">=</span> <span class="dv">5</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>MAX_PERCENTILE <span class="op">=</span> <span class="dv">95</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>min_percentile_value <span class="op">=</span> np.nanpercentile(gdf_trees[<span class="st">"dbh"</span>], MIN_PERCENTILE)</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>max_percentile_value <span class="op">=</span> np.nanpercentile(gdf_trees[<span class="st">"dbh"</span>], MAX_PERCENTILE)</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>ATTRIBUTE_TO_SHOW <span class="op">=</span> <span class="st">"dbh_clipped"</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>gdf_trees[ATTRIBUTE_TO_SHOW] <span class="op">=</span> gdf_trees[<span class="st">"dbh"</span>].clip(min_percentile_value, max_percentile_value)</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(<span class="dv">1</span>,<span class="dv">1</span>, figsize <span class="op">=</span> (<span class="dv">5</span>,<span class="dv">5</span>))</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>gdf_trees.plot(ax <span class="op">=</span> ax, cmap <span class="op">=</span> cmc.hawaii, column <span class="op">=</span> ATTRIBUTE_TO_SHOW, legend <span class="op">=</span> <span class="va">True</span>, markersize <span class="op">=</span> <span class="fl">0.1</span>)</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Trunk diameter (cm)"</span>)</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>gdf_trees.head(<span class="dv">5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="5">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">OBJECTID</th>
+<th data-quarto-table-cell-role="th">id</th>
+<th data-quarto-table-cell-role="th">spp_com</th>
+<th data-quarto-table-cell-role="th">spp_bot</th>
+<th data-quarto-table-cell-role="th">numberof_st</th>
+<th data-quarto-table-cell-role="th">dbh_range</th>
+<th data-quarto-table-cell-role="th">dbh</th>
+<th data-quarto-table-cell-role="th">date_plant</th>
+<th data-quarto-table-cell-role="th">neighborhood</th>
+<th data-quarto-table-cell-role="th">park</th>
+<th data-quarto-table-cell-role="th">...</th>
+<th data-quarto-table-cell-role="th">street</th>
+<th data-quarto-table-cell-role="th">suffix</th>
+<th data-quarto-table-cell-role="th">site</th>
+<th data-quarto-table-cell-role="th">x_longitude</th>
+<th data-quarto-table-cell-role="th">y_latitude</th>
+<th data-quarto-table-cell-role="th">shape_wkt</th>
+<th data-quarto-table-cell-role="th">POINT_X</th>
+<th data-quarto-table-cell-role="th">POINT_Y</th>
+<th data-quarto-table-cell-role="th">geometry</th>
+<th data-quarto-table-cell-role="th">dbh_clipped</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">0</th>
+<td>1</td>
+<td>6021</td>
+<td>Maple, Red</td>
+<td>Acer rubrum</td>
+<td>1.00000000</td>
+<td>3-6in</td>
+<td>7.62</td>
+<td>--</td>
+<td>East Boston</td>
+<td>NaN</td>
+<td>...</td>
+<td>Central Square</td>
+<td>NaN</td>
+<td>1</td>
+<td>-71.039001</td>
+<td>42.374348</td>
+<td>POINT (-71.038999998999941 42.374348000000055)</td>
+<td>-71.039000</td>
+<td>42.374348</td>
+<td>POINT (-71.039 42.37435)</td>
+<td>7.62</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">1</th>
+<td>2</td>
+<td>10721</td>
+<td>Ginkgo</td>
+<td>Ginkgo biloba</td>
+<td>1.00000000</td>
+<td>6-12in</td>
+<td>20.32</td>
+<td>--</td>
+<td>South End</td>
+<td>NaN</td>
+<td>...</td>
+<td>Albany Street</td>
+<td>NaN</td>
+<td>2</td>
+<td>-71.071808</td>
+<td>42.335381</td>
+<td>POINT (-71.071809999999971 42.335380000000043)</td>
+<td>-71.071810</td>
+<td>42.335380</td>
+<td>POINT (-71.07181 42.33538)</td>
+<td>20.32</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">2</th>
+<td>3</td>
+<td>1995</td>
+<td>Oak, Northern Red</td>
+<td>Quercus rubra</td>
+<td>1.00000000</td>
+<td>12-18in</td>
+<td>33.02</td>
+<td>--</td>
+<td>South End</td>
+<td>NaN</td>
+<td>...</td>
+<td>Columbus Avenue</td>
+<td>NaN</td>
+<td>1</td>
+<td>-71.073746</td>
+<td>42.346950</td>
+<td>POINT (-71.073745999999971 42.346950000000049)</td>
+<td>-71.073746</td>
+<td>42.346950</td>
+<td>POINT (-71.07375 42.34695)</td>
+<td>33.02</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">3</th>
+<td>4</td>
+<td>2823</td>
+<td>Honeylocust</td>
+<td>Gleditsia triacanthos</td>
+<td>1.00000000</td>
+<td>12-18in</td>
+<td>30.48</td>
+<td>--</td>
+<td>Charlestown</td>
+<td>NaN</td>
+<td>...</td>
+<td>2nd Avenue</td>
+<td>NaN</td>
+<td>3</td>
+<td>-71.054054</td>
+<td>42.375809</td>
+<td>POINT (-71.054053999999951 42.375810000000058)</td>
+<td>-71.054054</td>
+<td>42.375810</td>
+<td>POINT (-71.05405 42.37581)</td>
+<td>30.48</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">4</th>
+<td>5</td>
+<td>2962</td>
+<td>Pear, Callery</td>
+<td>Pyrus calleryana</td>
+<td>1.00000000</td>
+<td>6-12in</td>
+<td>25.40</td>
+<td>--</td>
+<td>Back Bay/Beacon Hill</td>
+<td>NaN</td>
+<td>...</td>
+<td>West Cedar Street</td>
+<td>NaN</td>
+<td>1</td>
+<td>-71.069969</td>
+<td>42.360497</td>
+<td>POINT (-71.069970000999945 42.360497000000066)</td>
+<td>-71.069970</td>
+<td>42.360497</td>
+<td>POINT (-71.06997 42.3605)</td>
+<td>25.40</td>
+</tr>
+</tbody>
+</table>
+
+<p>5 rows × 22 columns</p>
+</div>
+</div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="trees_preprocessing_files/figure-html/cell-2-output-2.png" width="428" height="403" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<div id="f18b5c7c" class="cell" data-execution_count="2">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Get the characteristics that we need</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">#Species</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>species <span class="op">=</span> <span class="bu">list</span>(gdf_trees[<span class="st">"spp_bot"</span>])</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>trunk_diameter <span class="op">=</span> <span class="bu">list</span>(gdf_trees[<span class="st">"dbh"</span>])</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>URBAN_TREE_DATABASE_URL <span class="op">=</span> <span class="st">"https://www.fs.usda.gov/rds/archive/products/RDS-2016-0005/RDS-2016-0005.zip"</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>URBAN_TREE_DATABASE_PATH <span class="op">=</span> Path(<span class="st">"/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/notebooks/2026_11_04_shadow_umep_tests/data/RDS-2016-0005.zip"</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> URBAN_TREE_DATABASE_PATH.exists():</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    urllib.request.urlretrieve(URBAN_TREE_DATABASE_URL, URBAN_TREE_DATABASE_PATH)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> zipfile.ZipFile(URBAN_TREE_DATABASE_PATH) <span class="im">as</span> database:</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    allometric_equations <span class="op">=</span> pd.read_csv(database.<span class="bu">open</span>(<span class="st">"Data/TS6_Growth_coefficients.csv"</span>), encoding <span class="op">=</span> <span class="st">"latin-1"</span>)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    measured_trees <span class="op">=</span> pd.read_csv(database.<span class="bu">open</span>(<span class="st">"Data/TS3_Raw_tree_data.csv"</span>), encoding <span class="op">=</span> <span class="st">"latin-1"</span>)</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(allometric_equations.head(<span class="dv">5</span>))</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(measured_trees.head(<span class="dv">5</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>   Region Scientific Name SpCode Independent variable Predicts component   \
+0  CenFla     Acer rubrum   ACRU                  dbh                 age   
+1  CenFla     Acer rubrum   ACRU                 cdia                 dbh   
+2  CenFla     Acer rubrum   ACRU                  dbh           crown dia   
+3  CenFla     Acer rubrum   ACRU                  dbh            crown ht   
+4  CenFla     Acer rubrum   ACRU                  age                 dbh   
+
+  Units of predicted components Model weight    EqName        a        b  ...  \
+0                         years        1/dbh       lin  1.51618  0.41447  ...   
+1                        meters            1  loglogw1  1.31180  3.00257  ...   
+2                        meters        1/dbh      quad  0.72545  0.25370  ...   
+3                        meters        1/dbh       lin  2.73019  0.12140  ...   
+4                   centimeters  1/sqrt(age)      quad -3.68110  3.05480  ...   
+
+    d   e  Apps min  Apps max     Sigma     n  adj R2  \
+0 NaN NaN      2.00     65.00   0.42975  54.0   0.876   
+1 NaN NaN      2.34     96.61   0.21781  54.0   0.894   
+2 NaN NaN      1.31     13.75   0.04139  54.0   0.910   
+3 NaN NaN      3.01     14.46   0.14542  54.0   0.641   
+4 NaN NaN      2.34     96.61  22.67922  54.0   0.847   
+
+   Data min (from raw data)  Data max (from raw data)    DF  
+0                       2.0                      48.0  52.0  
+1                       5.1                      94.5  52.0  
+2                       2.5                      15.8  51.0  
+3                       1.0                      17.0  52.0  
+4                       5.1                      94.5  51.0  
+
+[5 rows x 21 columns]
+   DbaseID  Region         City                       Source TreeID     Zone  \
+0        1  InlVal  Modesto, CA  Motown2.xls: Completed Data      1  Nursery   
+1        2  InlVal  Modesto, CA  Motown2.xls: Completed Data      2  Nursery   
+2        3  InlVal  Modesto, CA  Motown2.xls: Completed Data      3  Nursery   
+3        4  InlVal  Modesto, CA  Motown2.xls: Completed Data      4  Nursery   
+4        5  InlVal  Modesto, CA  Motown2.xls: Completed Data      5  Nursery   
+
+  Park/Street  SpCode                   ScientificName            CommonName  \
+0     Nursery   ACSA1                 Acer saccharinum          Silver maple   
+1     Nursery    BEPE                   Betula pendula  European white birch   
+2     Nursery   CESI4                  Celtis sinensis     Chinese hackberry   
+3     Nursery    CICA              Cinnamomum camphora          Camphor tree   
+4     Nursery  FRAN_R  Fraxinus angustifolia 'Raywood'           Raywood ash   
+
+   ... Shape WireConf dbh1 dbh2  dbh3 dbh4 dbh5 dbh6  dbh7  dbh8  
+0  ...    -1       -1  2.5 -1.0  -1.0 -1.0 -1.0 -1.0  -1.0  -1.0  
+1  ...    -1       -1  2.5 -1.0  -1.0 -1.0 -1.0 -1.0  -1.0  -1.0  
+2  ...    -1       -1  2.5 -1.0  -1.0 -1.0 -1.0 -1.0  -1.0  -1.0  
+3  ...    -1       -1  2.5 -1.0  -1.0 -1.0 -1.0 -1.0  -1.0  -1.0  
+4  ...    -1       -1  2.5 -1.0  -1.0 -1.0 -1.0 -1.0  -1.0  -1.0  
+
+[5 rows x 41 columns]</code></pre>
+</div>
+</div>
+</section>
+<section id="applying-the-allometric-equations" class="level3">
+<h3 class="anchored" data-anchor-id="applying-the-allometric-equations">Applying the allometric equations</h3>
+<div id="5c6e0172" class="cell" data-execution_count="3">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>REGION <span class="op">=</span> <span class="st">"NoEast"</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>DIMENSIONS <span class="op">=</span> {<span class="st">"tree ht"</span>: <span class="st">"tree_height"</span>, <span class="st">"crown dia"</span>: <span class="st">"crown_diameter"</span>, <span class="st">"crown ht"</span>: <span class="st">"crown_height"</span>}</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>equations <span class="op">=</span> allometric_equations.rename(columns <span class="op">=</span> {</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Predicts component "</span>: <span class="st">"dimension"</span>,</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Apps min"</span>: <span class="st">"min_reasonable_value"</span>,</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Apps max"</span>: <span class="st">"max_reasonable_value"</span>,</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>equations <span class="op">=</span> equations[equations[<span class="st">"Region"</span>] <span class="op">==</span> REGION]</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>equations <span class="op">=</span> equations[equations[<span class="st">"Independent variable"</span>] <span class="op">==</span> <span class="st">"dbh"</span>]</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>equations <span class="op">=</span> equations[equations[<span class="st">"dimension"</span>].isin(DIMENSIONS.keys())]</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>equations[<span class="st">"dimension"</span>] <span class="op">=</span> equations[<span class="st">"dimension"</span>].<span class="bu">map</span>(DIMENSIONS)</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>measured_trees_in_region <span class="op">=</span> measured_trees[measured_trees[<span class="st">"Region"</span>] <span class="op">==</span> REGION]</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>measured_dbh_by_species_code <span class="op">=</span> measured_trees_in_region.groupby(<span class="st">"SpCode"</span>)[<span class="st">"DBH (cm)"</span>]</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>equations[<span class="st">"min_measured_dbh"</span>] <span class="op">=</span> equations[<span class="st">"SpCode"</span>].<span class="bu">map</span>(measured_dbh_by_species_code.<span class="bu">min</span>())</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>equations[<span class="st">"max_measured_dbh"</span>] <span class="op">=</span> equations[<span class="st">"SpCode"</span>].<span class="bu">map</span>(measured_dbh_by_species_code.<span class="bu">max</span>())</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>species_with_equations <span class="op">=</span> <span class="bu">sorted</span>(equations[<span class="st">"Scientific Name"</span>].unique())</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>equation_lookup <span class="op">=</span> {(row[<span class="st">"Scientific Name"</span>], row[<span class="st">"dimension"</span>]): row <span class="cf">for</span> row <span class="kw">in</span> equations.to_dict(<span class="st">"records"</span>)}</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> predict_tree_dimensions(species_name, dbh):</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    equation_species, equation_source <span class="op">=</span> choose_equation_species(species_name)</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>    tree <span class="op">=</span> {}</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> dimension <span class="kw">in</span> DIMENSIONS.values():</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>        predictions <span class="op">=</span> [predict_with_equation(equation_lookup[(name, dimension)], dbh) <span class="cf">for</span> name <span class="kw">in</span> equation_species]</span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>        tree[dimension] <span class="op">=</span> np.mean(predictions)</span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>    tree[<span class="st">"crown_base_height"</span>] <span class="op">=</span> <span class="bu">max</span>(tree[<span class="st">"tree_height"</span>] <span class="op">-</span> tree[<span class="st">"crown_height"</span>], <span class="dv">0</span>)</span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>    tree[<span class="st">"equation_source"</span>] <span class="op">=</span> equation_source</span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> tree</span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> choose_equation_species(species_name):</span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> species_name <span class="kw">in</span> species_with_equations:</span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> [species_name], <span class="st">"species"</span></span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>    same_genus <span class="op">=</span> [name <span class="cf">for</span> name <span class="kw">in</span> species_with_equations <span class="cf">if</span> get_genus(name) <span class="op">==</span> get_genus(species_name)]</span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> same_genus:</span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> same_genus, <span class="st">"genus"</span></span>
+<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> species_with_equations, <span class="st">"all species"</span></span>
+<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-40"><a href="#cb4-40" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_genus(species_name):</span>
+<span id="cb4-41"><a href="#cb4-41" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> species_name.split(<span class="st">" "</span>)[<span class="dv">0</span>]</span>
+<span id="cb4-42"><a href="#cb4-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-43"><a href="#cb4-43" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> predict_with_equation(equation, dbh):</span>
+<span id="cb4-44"><a href="#cb4-44" aria-hidden="true" tabindex="-1"></a>    dbh_within_measured_range <span class="op">=</span> np.clip(dbh, equation[<span class="st">"min_measured_dbh"</span>], equation[<span class="st">"max_measured_dbh"</span>])</span>
+<span id="cb4-45"><a href="#cb4-45" aria-hidden="true" tabindex="-1"></a>    prediction <span class="op">=</span> apply_equation_form(equation, dbh_within_measured_range)</span>
+<span id="cb4-46"><a href="#cb4-46" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> np.clip(prediction, equation[<span class="st">"min_reasonable_value"</span>], equation[<span class="st">"max_reasonable_value"</span>])</span>
+<span id="cb4-47"><a href="#cb4-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-48"><a href="#cb4-48" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> apply_equation_form(equation, dbh):</span>
+<span id="cb4-49"><a href="#cb4-49" aria-hidden="true" tabindex="-1"></a>    a, b, c, d <span class="op">=</span> equation[<span class="st">"a"</span>], equation[<span class="st">"b"</span>], equation[<span class="st">"c"</span>], equation[<span class="st">"d"</span>]</span>
+<span id="cb4-50"><a href="#cb4-50" aria-hidden="true" tabindex="-1"></a>    mse <span class="op">=</span> c</span>
+<span id="cb4-51"><a href="#cb4-51" aria-hidden="true" tabindex="-1"></a>    form <span class="op">=</span> equation[<span class="st">"EqName"</span>]</span>
+<span id="cb4-52"><a href="#cb4-52" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> form <span class="op">==</span> <span class="st">"lin"</span>:</span>
+<span id="cb4-53"><a href="#cb4-53" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> a <span class="op">+</span> b <span class="op">*</span> dbh</span>
+<span id="cb4-54"><a href="#cb4-54" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> form <span class="op">==</span> <span class="st">"quad"</span>:</span>
+<span id="cb4-55"><a href="#cb4-55" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> a <span class="op">+</span> b <span class="op">*</span> dbh <span class="op">+</span> c <span class="op">*</span> dbh <span class="op">**</span> <span class="dv">2</span></span>
+<span id="cb4-56"><a href="#cb4-56" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> form <span class="op">==</span> <span class="st">"cub"</span>:</span>
+<span id="cb4-57"><a href="#cb4-57" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> a <span class="op">+</span> b <span class="op">*</span> dbh <span class="op">+</span> c <span class="op">*</span> dbh <span class="op">**</span> <span class="dv">2</span> <span class="op">+</span> d <span class="op">*</span> dbh <span class="op">**</span> <span class="dv">3</span></span>
+<span id="cb4-58"><a href="#cb4-58" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> form <span class="op">==</span> <span class="st">"loglogw1"</span>:</span>
+<span id="cb4-59"><a href="#cb4-59" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> np.exp(a <span class="op">+</span> b <span class="op">*</span> np.log(np.log(dbh <span class="op">+</span> <span class="dv">1</span>)) <span class="op">+</span> mse <span class="op">/</span> <span class="dv">2</span>)</span>
+<span id="cb4-60"><a href="#cb4-60" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> form <span class="op">==</span> <span class="st">"loglogw2"</span>:</span>
+<span id="cb4-61"><a href="#cb4-61" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> np.exp(a <span class="op">+</span> b <span class="op">*</span> np.log(np.log(dbh <span class="op">+</span> <span class="dv">1</span>)) <span class="op">+</span> np.sqrt(dbh) <span class="op">*</span> mse <span class="op">/</span> <span class="dv">2</span>)</span>
+<span id="cb4-62"><a href="#cb4-62" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> form <span class="op">==</span> <span class="st">"expow1"</span>:</span>
+<span id="cb4-63"><a href="#cb4-63" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> np.exp(a <span class="op">+</span> b <span class="op">*</span> dbh <span class="op">+</span> mse <span class="op">/</span> <span class="dv">2</span>)</span>
+<span id="cb4-64"><a href="#cb4-64" aria-hidden="true" tabindex="-1"></a>    <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="ss">f"Equation form </span><span class="sc">{</span>form<span class="sc">}</span><span class="ss"> is not implemented."</span>)</span>
+<span id="cb4-65"><a href="#cb4-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-66"><a href="#cb4-66" aria-hidden="true" tabindex="-1"></a>tree_dimensions <span class="op">=</span> pd.DataFrame(</span>
+<span id="cb4-67"><a href="#cb4-67" aria-hidden="true" tabindex="-1"></a>    [predict_tree_dimensions(name, dbh) <span class="cf">for</span> name, dbh <span class="kw">in</span> <span class="bu">zip</span>(species, trunk_diameter)],</span>
+<span id="cb4-68"><a href="#cb4-68" aria-hidden="true" tabindex="-1"></a>    index <span class="op">=</span> gdf_trees.index,</span>
+<span id="cb4-69"><a href="#cb4-69" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-70"><a href="#cb4-70" aria-hidden="true" tabindex="-1"></a>gdf_trees[tree_dimensions.columns] <span class="op">=</span> tree_dimensions</span>
+<span id="cb4-71"><a href="#cb4-71" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-72"><a href="#cb4-72" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gdf_trees[<span class="st">"equation_source"</span>].value_counts())</span>
+<span id="cb4-73"><a href="#cb4-73" aria-hidden="true" tabindex="-1"></a>gdf_trees[[<span class="st">"dbh"</span>, <span class="st">"tree_height"</span>, <span class="st">"crown_diameter"</span>, <span class="st">"crown_height"</span>, <span class="st">"crown_base_height"</span>]].describe()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>equation_source
+species        31279
+genus          13803
+all species     6966
+Name: count, dtype: int64</code></pre>
+</div>
+<div class="cell-output cell-output-display" data-execution_count="7">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">dbh</th>
+<th data-quarto-table-cell-role="th">tree_height</th>
+<th data-quarto-table-cell-role="th">crown_diameter</th>
+<th data-quarto-table-cell-role="th">crown_height</th>
+<th data-quarto-table-cell-role="th">crown_base_height</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">count</th>
+<td>52048.000000</td>
+<td>52048.000000</td>
+<td>52048.000000</td>
+<td>52048.000000</td>
+<td>52048.000000</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">mean</th>
+<td>24.451516</td>
+<td>8.826746</td>
+<td>6.932594</td>
+<td>6.336252</td>
+<td>2.490493</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">std</th>
+<td>21.404578</td>
+<td>4.661704</td>
+<td>4.435878</td>
+<td>3.579977</td>
+<td>1.237128</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">min</th>
+<td>2.540000</td>
+<td>2.680000</td>
+<td>0.881191</td>
+<td>1.155267</td>
+<td>0.172965</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">25%</th>
+<td>7.620000</td>
+<td>4.715199</td>
+<td>3.069734</td>
+<td>3.343270</td>
+<td>1.537050</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">50%</th>
+<td>17.780000</td>
+<td>7.627570</td>
+<td>5.788729</td>
+<td>5.528874</td>
+<td>2.230572</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">75%</th>
+<td>35.560000</td>
+<td>12.148474</td>
+<td>10.384588</td>
+<td>8.775122</td>
+<td>3.381107</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">max</th>
+<td>289.560000</td>
+<td>34.170000</td>
+<td>28.440000</td>
+<td>24.330000</td>
+<td>9.840000</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+</section>
+<section id="exporting-the-geojson-file-of-the-trees" class="level3">
+<h3 class="anchored" data-anchor-id="exporting-the-geojson-file-of-the-trees">Exporting the geojson file of the trees</h3>
+<div id="12cb8bc9" class="cell" data-execution_count="4">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>TREE_CROWNS_PATH <span class="op">=</span> <span class="st">"/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/notebooks/2026_11_04_shadow_umep_tests/data/tree_crowns.geojson"</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>SEGMENTS_PER_QUARTER_CIRCLE <span class="op">=</span> <span class="dv">4</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>EXPORTED_COLUMNS <span class="op">=</span> [</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"OBJECTID"</span>, <span class="st">"id"</span>, <span class="st">"spp_bot"</span>, <span class="st">"spp_com"</span>, <span class="st">"dbh"</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"tree_height"</span>, <span class="st">"crown_diameter"</span>, <span class="st">"crown_height"</span>, <span class="st">"crown_base_height"</span>, <span class="st">"equation_source"</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"geometry"</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>tree_crowns <span class="op">=</span> gdf_trees[EXPORTED_COLUMNS].to_crs(<span class="dv">32619</span>)</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>tree_crowns[<span class="st">"geometry"</span>] <span class="op">=</span> tree_crowns.<span class="bu">buffer</span>(tree_crowns[<span class="st">"crown_diameter"</span>] <span class="op">/</span> <span class="dv">2</span>, resolution <span class="op">=</span> SEGMENTS_PER_QUARTER_CIRCLE)</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>tree_crowns.to_crs(<span class="dv">4326</span>).to_file(TREE_CROWNS_PATH, driver <span class="op">=</span> <span class="st">"GeoJSON"</span>)</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(<span class="dv">1</span>,<span class="dv">1</span>,figsize <span class="op">=</span> (<span class="dv">5</span>,<span class="dv">5</span>))</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>tree_crowns.plot(ax <span class="op">=</span> ax, column <span class="op">=</span> <span class="st">"tree_height"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="trees_preprocessing_files/figure-html/cell-5-output-1.png" width="410" height="425" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

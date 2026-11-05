@@ -1,0 +1,155 @@
+---
+title: Tree data preprocessing
+author: Uriel Legaria
+date: 2026-11-04
+format: html
+jupyter: open-sensing
+---
+
+I obtained the data from https://data.boston.gov/dataset/bprd-trees
+
+### Opening the data
+```{python}
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import cmcrameri.cm as cmc
+import pandas as pd
+import numpy as np
+import zipfile
+import urllib.request
+from pathlib import Path
+TREE_DATA_PATH = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/notebooks/2026_11_04_shadow_umep_tests/data/bprd_trees.geojson.json"
+
+gdf_trees = gpd.read_file(TREE_DATA_PATH)
+gdf_trees["dbh"] = pd.to_numeric(gdf_trees["dbh"], errors = "coerce") * 2.54
+gdf_trees = gdf_trees[gdf_trees["dbh"] > 0]
+MIN_PERCENTILE = 5
+MAX_PERCENTILE = 95
+min_percentile_value = np.nanpercentile(gdf_trees["dbh"], MIN_PERCENTILE)
+max_percentile_value = np.nanpercentile(gdf_trees["dbh"], MAX_PERCENTILE)
+ATTRIBUTE_TO_SHOW = "dbh_clipped"
+gdf_trees[ATTRIBUTE_TO_SHOW] = gdf_trees["dbh"].clip(min_percentile_value, max_percentile_value)
+
+
+fig, ax = plt.subplots(1,1, figsize = (5,5))
+gdf_trees.plot(ax = ax, cmap = cmc.hawaii, column = ATTRIBUTE_TO_SHOW, legend = True, markersize = 0.1)
+ax.set_title("Trunk diameter (cm)")
+gdf_trees.head(5)
+
+```
+
+```{python}
+#Get the characteristics that we need
+#Species
+species = list(gdf_trees["spp_bot"])
+trunk_diameter = list(gdf_trees["dbh"])
+
+URBAN_TREE_DATABASE_URL = "https://www.fs.usda.gov/rds/archive/products/RDS-2016-0005/RDS-2016-0005.zip"
+URBAN_TREE_DATABASE_PATH = Path("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/notebooks/2026_11_04_shadow_umep_tests/data/RDS-2016-0005.zip")
+
+if not URBAN_TREE_DATABASE_PATH.exists():
+    urllib.request.urlretrieve(URBAN_TREE_DATABASE_URL, URBAN_TREE_DATABASE_PATH)
+
+with zipfile.ZipFile(URBAN_TREE_DATABASE_PATH) as database:
+    allometric_equations = pd.read_csv(database.open("Data/TS6_Growth_coefficients.csv"), encoding = "latin-1")
+    measured_trees = pd.read_csv(database.open("Data/TS3_Raw_tree_data.csv"), encoding = "latin-1")
+
+print(allometric_equations.head(5))
+print(measured_trees.head(5))
+```
+
+### Applying the allometric equations
+
+```{python}
+REGION = "NoEast"
+DIMENSIONS = {"tree ht": "tree_height", "crown dia": "crown_diameter", "crown ht": "crown_height"}
+
+equations = allometric_equations.rename(columns = {
+    "Predicts component ": "dimension",
+    "Apps min": "min_reasonable_value",
+    "Apps max": "max_reasonable_value",
+})
+equations = equations[equations["Region"] == REGION]
+equations = equations[equations["Independent variable"] == "dbh"]
+equations = equations[equations["dimension"].isin(DIMENSIONS.keys())]
+equations["dimension"] = equations["dimension"].map(DIMENSIONS)
+
+measured_trees_in_region = measured_trees[measured_trees["Region"] == REGION]
+measured_dbh_by_species_code = measured_trees_in_region.groupby("SpCode")["DBH (cm)"]
+equations["min_measured_dbh"] = equations["SpCode"].map(measured_dbh_by_species_code.min())
+equations["max_measured_dbh"] = equations["SpCode"].map(measured_dbh_by_species_code.max())
+
+species_with_equations = sorted(equations["Scientific Name"].unique())
+equation_lookup = {(row["Scientific Name"], row["dimension"]): row for row in equations.to_dict("records")}
+
+def predict_tree_dimensions(species_name, dbh):
+    equation_species, equation_source = choose_equation_species(species_name)
+    tree = {}
+    for dimension in DIMENSIONS.values():
+        predictions = [predict_with_equation(equation_lookup[(name, dimension)], dbh) for name in equation_species]
+        tree[dimension] = np.mean(predictions)
+    tree["crown_base_height"] = max(tree["tree_height"] - tree["crown_height"], 0)
+    tree["equation_source"] = equation_source
+    return tree
+
+def choose_equation_species(species_name):
+    if species_name in species_with_equations:
+        return [species_name], "species"
+    same_genus = [name for name in species_with_equations if get_genus(name) == get_genus(species_name)]
+    if same_genus:
+        return same_genus, "genus"
+    return species_with_equations, "all species"
+
+def get_genus(species_name):
+    return species_name.split(" ")[0]
+
+def predict_with_equation(equation, dbh):
+    dbh_within_measured_range = np.clip(dbh, equation["min_measured_dbh"], equation["max_measured_dbh"])
+    prediction = apply_equation_form(equation, dbh_within_measured_range)
+    return np.clip(prediction, equation["min_reasonable_value"], equation["max_reasonable_value"])
+
+def apply_equation_form(equation, dbh):
+    a, b, c, d = equation["a"], equation["b"], equation["c"], equation["d"]
+    mse = c
+    form = equation["EqName"]
+    if form == "lin":
+        return a + b * dbh
+    if form == "quad":
+        return a + b * dbh + c * dbh ** 2
+    if form == "cub":
+        return a + b * dbh + c * dbh ** 2 + d * dbh ** 3
+    if form == "loglogw1":
+        return np.exp(a + b * np.log(np.log(dbh + 1)) + mse / 2)
+    if form == "loglogw2":
+        return np.exp(a + b * np.log(np.log(dbh + 1)) + np.sqrt(dbh) * mse / 2)
+    if form == "expow1":
+        return np.exp(a + b * dbh + mse / 2)
+    raise ValueError(f"Equation form {form} is not implemented.")
+
+tree_dimensions = pd.DataFrame(
+    [predict_tree_dimensions(name, dbh) for name, dbh in zip(species, trunk_diameter)],
+    index = gdf_trees.index,
+)
+gdf_trees[tree_dimensions.columns] = tree_dimensions
+
+print(gdf_trees["equation_source"].value_counts())
+gdf_trees[["dbh", "tree_height", "crown_diameter", "crown_height", "crown_base_height"]].describe()
+```
+
+
+### Exporting the geojson file of the trees
+```{python}
+TREE_CROWNS_PATH = "/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/notebooks/2026_11_04_shadow_umep_tests/data/tree_crowns.geojson"
+SEGMENTS_PER_QUARTER_CIRCLE = 4
+EXPORTED_COLUMNS = [
+    "OBJECTID", "id", "spp_bot", "spp_com", "dbh",
+    "tree_height", "crown_diameter", "crown_height", "crown_base_height", "equation_source",
+    "geometry",
+]
+
+tree_crowns = gdf_trees[EXPORTED_COLUMNS].to_crs(32619)
+tree_crowns["geometry"] = tree_crowns.buffer(tree_crowns["crown_diameter"] / 2, resolution = SEGMENTS_PER_QUARTER_CIRCLE)
+tree_crowns.to_crs(4326).to_file(TREE_CROWNS_PATH, driver = "GeoJSON")
+fig, ax = plt.subplots(1,1,figsize = (5,5))
+tree_crowns.plot(ax = ax, column = "tree_height")
+```
