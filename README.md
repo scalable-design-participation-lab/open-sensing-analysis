@@ -14,3 +14,7 @@ To view the notebooks click on:
 * [Building shadow test](https://scalable-design-participation-lab.github.io/open-sensing-analysis/notebooks/2026_11_04_shadow_umep_tests/shadow_tests.html)
 * [Constructing a geojson for tree heights](https://scalable-design-participation-lab.github.io/open-sensing-analysis/notebooks/2026_11_04_shadow_umep_tests/trees_preprocessing.html)
 * [Building + trees shadow test](https://scalable-design-participation-lab.github.io/open-sensing-analysis/notebooks/2026_11_04_shadow_umep_tests/vegetation_plus_buildings_shadows.html)
+
+### 2026-11-13 - Shadow vs. temperature
+* [Shadow vs. temperature — data export](https://scalable-design-participation-lab.github.io/open-sensing-analysis/notebooks/2026_11_13_shadow_temp_correlations/shadow_temp_correlations.html)
+* [Shadow vs. temperature — model](https://scalable-design-participation-lab.github.io/open-sensing-analysis/notebooks/2026_11_13_shadow_temp_correlations/shadow_temp_model.html)

@@ -1,0 +1,464 @@
+---
+title: Shadow vs. temperature — data export
+author: Uriel Legaria
+date: 2026-11-13
+jupyter: open-sensing
+---
+I will export a file obtaining the shadow time series at different radii for each of the 5 sensors. 
+
+
+### Opening the geometry data
+
+In this first part, I'll open the Geojsons for the:
+1. Building data.
+2. Tree data.
+
+```{python}
+from pathlib import Path
+import geopandas as gpd
+from shapely.geometry import box
+import pandas as pd
+import cmcrameri.cm as cmc
+import matplotlib.pyplot as plt
+import numpy as np
+import sys
+from rasterio.features import rasterize
+from rasterio.transform import from_origin, rowcol
+from rasterio.plot import show, plotting_extent
+import pvlib
+import json
+
+#Time series imports
+sys.path.append("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/src/time_series")
+from series_aligner import _prepare_resampled_series
+from time_series_comparison_metrics import compute_correlation_coefficient
+
+#UMEP imports
+sys.path.append("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/notebooks/2026_11_13_shadow_temp_correlations/src")
+from umep_single_pixel import get_sun_ray, get_window_shadow_values
+from umep.util.shadowingfunctions import shadowingfunctionglobalradiation
+
+#Visualization imports 
+sys.path.append("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/src/visualization")
+from distribution_plotter import DistributionPlotter
+
+PARENT_PATH_DATA = Path("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/notebooks/2026_11_13_shadow_temp_correlations/data")
+
+#Geojson that contains the tree geometries. 
+PATH_TREE_DATA = PARENT_PATH_DATA/"tree_crowns.geojson"
+
+#Geojson that contains the building geometries. 
+BUILDING_DATA = PARENT_PATH_DATA/"building_attributes.geojson"
+
+
+#Open the two GDFs.
+gdf_trees = gpd.read_file(PATH_TREE_DATA)
+gdf_buildings = gpd.read_file(BUILDING_DATA)
+COMMON_CRS = gdf_trees.crs
+gdf_buildings = gdf_buildings.to_crs(COMMON_CRS)
+
+#We first need to construct a box with gdf_buildings
+min_x, min_y, max_x, max_y = gdf_buildings.total_bounds
+gdf_box = gpd.GeoDataFrame({"dummy": [1]}, geometry = [box(minx = min_x, miny = min_y, maxx = max_x, maxy = max_y)], crs = COMMON_CRS)
+
+#Now we use sjoin to find the intersection between the trees and the box
+gdf_trees_intersection = gdf_trees.sjoin(gdf_box, how = "inner", predicate="intersects")
+#Let's rename the
+
+gdf_trees_intersection = gdf_trees_intersection.rename(columns = {
+    "tree_height":"height"
+})
+
+gdf_buildings = gdf_buildings.rename(
+    columns = {
+        "reference_height": "height"
+    }
+)
+
+gdf_trees_intersection.head(5)
+```
+
+Let's plot the geometries. 
+
+```{python}
+fig, ax = plt.subplots(figsize = (10,10))
+MIN_PERCENTILE = 5
+MAX_PERCENTILE = 95
+height_values = list(gdf_buildings["height"]) + list(gdf_trees_intersection["height"])
+
+min_percentile_value = np.nanpercentile(height_values, MIN_PERCENTILE)
+max_percentile_value = np.nanpercentile(height_values, MAX_PERCENTILE)
+
+gdf_buildings["height_clipped"] = gdf_buildings["height"].clip(min_percentile_value, max_percentile_value)
+gdf_trees_intersection["height_clipped"] = gdf_trees_intersection["height"].clip(min_percentile_value, max_percentile_value)
+
+gdf_buildings.plot(
+    column = "height_clipped", 
+    cmap = cmc.hawaii,
+    vmin = min_percentile_value,
+    vmax = max_percentile_value,
+    legend = True, 
+    ax = ax
+)
+gdf_trees_intersection.plot(
+    column = "height_clipped",
+    cmap = cmc.hawaii,
+    vmin = min_percentile_value,
+    vmax = max_percentile_value,
+    ax = ax
+)
+
+ax.set_title("Height of trees and buildings")
+ax.set_axis_off()
+```
+
+Let's rasterize them
+
+```{python}
+METRIC_CRS = "EPSG:32619"
+PIXEL_SIZE_METERS = 1.0
+
+buildings_tallest_last = (
+    gdf_buildings
+    .dropna(subset = ["height"])
+    .to_crs(METRIC_CRS)
+    .sort_values("height")
+)
+
+trees_tallest_last = (
+    gdf_trees_intersection
+    .to_crs(METRIC_CRS)
+    .sort_values("height")
+)
+
+buildings_left, buildings_bottom, buildings_right, buildings_top = buildings_tallest_last.total_bounds
+trees_left, trees_bottom, trees_right, trees_top = trees_tallest_last.total_bounds
+left = min(buildings_left, trees_left)
+bottom = min(buildings_bottom, trees_bottom)
+right = max(buildings_right, trees_right)
+top = max(buildings_top, trees_top)
+
+raster_width = int(np.ceil((right - left) / PIXEL_SIZE_METERS))
+raster_height = int(np.ceil((top - bottom) / PIXEL_SIZE_METERS))
+pixel_to_metric_coordinates = from_origin(
+    west = left,
+    north = top,
+    xsize = PIXEL_SIZE_METERS,
+    ysize = PIXEL_SIZE_METERS
+)
+
+
+def rasterize_heights(
+    gdf,
+    height_column
+):
+    height_raster = rasterize(
+        shapes = zip(gdf.geometry, gdf[height_column]),
+        out_shape = (raster_height, raster_width),
+        transform = pixel_to_metric_coordinates,
+        fill = 0.0,
+        dtype = "float32"
+    )
+    return height_raster
+
+
+rasters = {
+    "buildings": rasterize_heights(
+        gdf = buildings_tallest_last,
+        height_column = "height"
+    ),
+    "crowns": rasterize_heights(
+        gdf = trees_tallest_last,
+        height_column = "height"
+    ),
+    "trunks": rasterize_heights(
+        gdf = trees_tallest_last,
+        height_column = "crown_base_height"
+    )
+}
+
+raster_plot_settings = {
+    "buildings": {"title": "Buildings (meters)", "max_height": max_percentile_value},
+    "crowns": {"title": "Tree crowns (meters)", "max_height": rasters["crowns"].max()},
+    "trunks": {"title": "Tree trunks (meters)", "max_height": rasters["trunks"].max()}
+}
+raster_names = list(rasters.keys())
+n_rasters = len(raster_names)
+
+fig, ax = plt.subplots(1, 3, figsize = (12, 4))
+for i in range(0, n_rasters):
+    raster_name = raster_names[i]
+    image = ax[i].imshow(
+        rasters[raster_name],
+        cmap = cmc.hawaii,
+        vmin = 0,
+        vmax = raster_plot_settings[raster_name]["max_height"]
+    )
+    fig.colorbar(
+        mappable = image,
+        ax = ax[i]
+    )
+    ax[i].set_title(raster_plot_settings[raster_name]["title"])
+    ax[i].set_axis_off()
+```
+
+### Opening the sensor data.
+
+There are 5 sensors in the area of interest. Let's open their locations and their data and plot it.
+```{python}
+#Let's open data of all of the sensors.
+carter_field_df = pd.read_csv(PARENT_PATH_DATA/"carter_field.csv")
+gainsborough_df = pd.read_csv(PARENT_PATH_DATA/"gainsborough_parking_garage.csv")
+robinson_hall_df = pd.read_csv(PARENT_PATH_DATA/"robinson_hall.csv")
+west_village_df = pd.read_csv(PARENT_PATH_DATA/"west_village_b.csv")
+world_series_way_df = pd.read_csv(PARENT_PATH_DATA/"world_series_way.csv")
+
+sensor_locations_df = pd.read_json(PARENT_PATH_DATA/"sensor_locations.json")
+
+
+all_sensors_data = {}
+all_sensor_names = ["Boston West Village B", "Boston World Series Way", "Boston Robinson Hall", "Boston Gainsborough Parking Garage", "Boston Carter Field"]
+all_sensor_dfs = [west_village_df, world_series_way_df, robinson_hall_df, gainsborough_df, carter_field_df]
+
+for i in range(0,len(all_sensor_names)):
+    sensor_name = all_sensor_names[i]
+    sensor_df = all_sensor_dfs[i]
+    latitude = float(sensor_locations_df[sensor_locations_df["sensor_name"] == sensor_name]["latitude"].iloc[0])
+    longitude = float(sensor_locations_df[sensor_locations_df["sensor_name"] == sensor_name]["longitude"].iloc[0])
+
+    all_sensors_data[sensor_name] = {
+        "name":sensor_name,
+        "df": sensor_df,
+        "location": (latitude, longitude)
+    }
+
+#Let's resample the data for each of the sensors per hour
+for name in all_sensor_names:
+    all_sensors_data[name]["df"] = _prepare_resampled_series(
+        df = all_sensors_data[name]["df"],
+        variable_name = "temperature",
+        time_column = "timestamp",
+        sampling_interval = "1h"
+    ).to_frame()
+
+all_sensors_data["Boston West Village B"]["df"].head(10)
+```
+
+
+### Extracting the shadow values that correspond to each datetime. 
+
+Now I am going to apply the algorithm of `shadowingfunction_20` around each sensor, which is a function that computes shadows given 3 rasters:
+
+1. Raster of building heights.
+2. Raster of tree crown heights. 
+3. Raster of tree trunk heights. 
+
+For each date, I compute the shadow of every pixel within the largest radius, which is 300 meters. From that I can compute average shadow values for smaller radii.
+
+This saves a file `sensor_shadows.json` with a list of dictionaries that look like this:
+
+```
+{
+        "sensor_name": "Boston West Village B",
+        "timestamp": "2024-11-15 16:00",
+        "shadow_radius_0m": 0.0,
+        "shadow_radius_10m": 0.2113564668769716,
+        "shadow_radius_50m": 0.27877629063097514,
+        "shadow_radius_100m": 0.2776203966005666,
+        "shadow_radius_200m": 0.35721855622507537,
+        "shadow_radius_300m": 0.4149010778324496
+}
+```
+This will allow us to compute correlations between temperature values at multiple radii. Something important to note is that usually correlations at bigger scales are very probable. 
+
+ 
+```{python}
+TREE_TRANSMISSIVITY = 0.03
+RADII_METERS = [0, 10, 50, 100, 200, 300]
+SHADOWS_PATH = PARENT_PATH_DATA/"sensor_shadows.json"
+
+largest_radius_pixels = int(max(RADII_METERS) / PIXEL_SIZE_METERS)
+window_size = 2 * largest_radius_pixels + 1
+steps_from_center = np.arange(0, window_size) - largest_radius_pixels
+row_steps, column_steps = np.meshgrid(steps_from_center, steps_from_center, indexing = "ij")
+meters_from_center = np.sqrt(row_steps**2 + column_steps**2) * PIXEL_SIZE_METERS
+
+n_radii = len(RADII_METERS)
+radius_masks = {}
+for i in range(0, n_radii):
+    radius = RADII_METERS[i]
+    radius_masks[radius] = meters_from_center <= radius
+
+
+def get_shadows_for_sensor(
+    sensor_name,
+    sensor_location,
+    rasters,
+    times_to_probe,
+    pixel_to_metric_coordinates,
+    largest_radius_pixels,
+    window_size,
+    radius_masks
+):
+    solar_position = pvlib.solarposition.get_solarposition(times_to_probe, sensor_location[0], sensor_location[1])
+    solar_position = solar_position[solar_position["apparent_elevation"] > 0]
+    ALL_DATES = list(solar_position.index.strftime("%Y-%m-%d %H:%M"))
+    azimuth_values = list(solar_position["azimuth"])
+    altitude_values = list(solar_position["apparent_elevation"])
+
+    #Now we want the shadow value at the location of the sensor
+    longitude_sensor = sensor_location[1]
+    latitude_sensor = sensor_location[0]
+    #Now we need to find the cell where the sensor is located
+    sensor_points = gpd.points_from_xy(
+        x = [longitude_sensor],
+        y = [latitude_sensor],
+        crs = "EPSG:4326"
+    )
+    sensor_point = gpd.GeoSeries(sensor_points).to_crs(METRIC_CRS).iloc[0]
+    index1, index2 = rowcol(
+        transform = pixel_to_metric_coordinates,
+        xs = sensor_point.x,
+        ys = sensor_point.y
+    )
+
+    window = {
+        "top_row": index1 - largest_radius_pixels,
+        "left_column": index2 - largest_radius_pixels,
+        "n_rows": window_size,
+        "n_columns": window_size
+    }
+
+    n_dates = len(ALL_DATES)
+    n_radii = len(RADII_METERS)
+    shadow_records = []
+    for i in range(0, n_dates):
+        sun_ray = get_sun_ray(
+            dsm = rasters["buildings"],
+            azimuth = azimuth_values[i],
+            altitude = altitude_values[i],
+            pixel_size_meters = PIXEL_SIZE_METERS
+        )
+        shadow_values = get_window_shadow_values(
+            rasters = rasters,
+            window = window,
+            sun_ray = sun_ray,
+            transmissivity = TREE_TRANSMISSIVITY
+        )
+        shadow_record = {"sensor_name": sensor_name, "timestamp": ALL_DATES[i]}
+        for j in range(0, n_radii):
+            radius = RADII_METERS[j]
+            shadow_record[f"shadow_radius_{radius}m"] = float(np.mean(shadow_values[radius_masks[radius]]))
+        shadow_records.append(shadow_record)
+
+    return shadow_records
+
+
+#Now we apply the get_shadows_for_sensor function to our sensors
+
+n_sensors = len(all_sensor_names)
+
+if(not SHADOWS_PATH.exists()):
+    all_shadow_records = []
+    for i in range(0, n_sensors):
+        name = all_sensor_names[i]
+        shadows = get_shadows_for_sensor(
+            sensor_name = name,
+            sensor_location = all_sensors_data[name]["location"],
+            rasters = rasters,
+            times_to_probe = all_sensors_data[name]["df"].index,
+            pixel_to_metric_coordinates = pixel_to_metric_coordinates,
+            largest_radius_pixels = largest_radius_pixels,
+            window_size = window_size,
+            radius_masks = radius_masks
+        )
+        all_shadow_records = all_shadow_records + shadows
+    shadows_text = json.dumps(
+        obj = all_shadow_records,
+        indent = 4
+    )
+    SHADOWS_PATH.write_text(shadows_text)
+
+shadows_df = pd.read_json(
+    path_or_buf = SHADOWS_PATH,
+    convert_dates = ["timestamp"]
+)
+for i in range(0, n_sensors):
+    name = all_sensor_names[i]
+    sensor_shadows_df = shadows_df[shadows_df["sensor_name"] == name]
+    all_dates = all_sensors_data[name]["df"].index 
+    all_sensors_data[name]["shadows"] = sensor_shadows_df.set_index("timestamp").reindex(all_dates)
+
+
+sensor_example = all_sensors_data[all_sensor_names[1]]
+INITIAL_INDEX_TO_SHOW = 0
+FINAL_INDEX_TO_SHOW = 5000
+
+
+n_plots = 1 + n_radii
+fig, ax = plt.subplots(n_plots, 1, figsize = (10, 3 * n_plots))
+
+ax[0].plot(list(sensor_example["df"]["temperature"])[INITIAL_INDEX_TO_SHOW:FINAL_INDEX_TO_SHOW])
+ax[0].set_title("Temperature plot")
+ax[0].set_xlabel("Data point")
+ax[0].set_ylabel("Temperature (celsius)")
+
+for i in range(0, n_radii):
+    radius = RADII_METERS[i]
+    ax[i + 1].plot(list(sensor_example["shadows"][f"shadow_radius_{radius}m"])[INITIAL_INDEX_TO_SHOW: FINAL_INDEX_TO_SHOW])
+    ax[i + 1].set_title(f"Shadow value, radius {radius} m")
+    ax[i + 1].set_ylabel("Share of direct sunlight (0 - 1)")
+    ax[i + 1].set_xlabel("Data point")
+
+fig.tight_layout()
+```
+
+### Obtaining the correlations
+```{python}
+#Iterate over all sensors
+for sensor_name in all_sensor_names:
+    #Iterate over radii
+    temperature_values = all_sensors_data[sensor_name]["df"]["temperature"]
+    all_sensors_data[sensor_name]["shadow_correlations"] = {}
+
+    for i in range(0,n_radii):
+        radius = RADII_METERS[i]
+        shadow_values = all_sensors_data[sensor_name]["shadows"][f"shadow_radius_{radius}m"]
+        has_both_values = shadow_values.notna() & temperature_values.notna()
+        correlation_coefficient = compute_correlation_coefficient(shadow_values[has_both_values], temperature_values[has_both_values])
+
+        all_sensors_data[sensor_name]["shadow_correlations"][f"shadow_radius_{radius}m"] = correlation_coefficient
+
+
+
+#After we have obtained the correlation coefficient we will plot the coeffs per radii and per sensor
+distribution_plotter = DistributionPlotter()
+sensor_labels = [sensor_name.replace("Boston ", "") for sensor_name in all_sensor_names]
+
+correlation_bars = []
+for i in range(0, n_radii):
+    radius = RADII_METERS[i]
+    correlations_at_radius = []
+    for sensor_name in all_sensor_names:
+        correlations_at_radius.append(all_sensors_data[sensor_name]["shadow_correlations"][f"shadow_radius_{radius}m"])
+    correlation_bars.append({
+        "x": sensor_labels,
+        "y": correlations_at_radius,
+        "color_bars": cmc.batlow(i/(n_radii - 1)),
+        "label": f"{radius} m"
+    })
+
+ax = distribution_plotter.multi_distribution_plotter(
+    correlation_bars,
+    width = 14,
+    height = 6,
+    title = "Correlation between temperature and shadow value",
+    variable_name = "Pearson correlation coefficient"
+)
+ax.axhline(0, color = "gray", linewidth = 1)
+ax.legend(title = "Radius", loc = "upper left", bbox_to_anchor = (1, 1))
+```
+
+### Observations
+
+Correlations might be confounded by how many data point in shade vs. sun we have for each sensor. So I will investigate that in another notebook. 
