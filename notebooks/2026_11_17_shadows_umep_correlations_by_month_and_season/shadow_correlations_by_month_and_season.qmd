@@ -1,0 +1,484 @@
+---
+title: Shadow model by month and season.
+author: Uriel Legaria
+jupyter: open-sensing
+date: 2026-11-17
+format: 
+    html:
+        highlight-style: dracula
+---
+
+### Opening the shadow data
+```{python}
+from pathlib import Path
+import pandas as pd
+import numpy as np
+from datetime import datetime
+import cmcrameri.cm as cmc
+import sys
+import statsmodels.formula.api as smf
+
+#Append the src for the sampling analysis project. 
+sys.path.append("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/src/time_series")
+from series_aligner import _prepare_resampled_series
+
+sys.path.append("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/notebooks/2026_11_17_shadows_umep_correlations_by_month_and_season/src")
+from month_day import MonthDayClass
+
+sys.path.append("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/src/visualization")
+from distribution_plotter import DistributionPlotter
+
+PARENT_DATA_PATH = Path("/Users/legariapena.j/Documents/open-sensing-analysis/open-sensing-analysis/notebooks/2026_11_13_shadow_temp_correlations/data")
+
+SHADOW_DATA_PATH = PARENT_DATA_PATH/"sensor_shadows.json"
+
+shadow_data = pd.read_json(SHADOW_DATA_PATH)
+shadow_data.head()
+```
+
+Now we filter the hours that each of the sensors was exposed to the sun. A sensor is 
+
+```{python}
+
+SENSOR_NAMES = list(shadow_data["sensor_name"].unique())
+
+#Get the subdfs for each of the sensors
+
+shadow_data_by_sensor = {}
+
+for i in range(0,len(SENSOR_NAMES)):
+    sensor_name = SENSOR_NAMES[i]
+    shadow_data_by_sensor[sensor_name] = shadow_data[shadow_data["sensor_name"] == sensor_name]
+```
+
+
+### Opening the sensor data
+```{python}
+SENSOR_FILE_PATHS = {
+    "Boston World Series Way": PARENT_DATA_PATH/"world_series_way.csv",
+    "Boston Robinson Hall": PARENT_DATA_PATH/"robinson_hall.csv", 
+    "Boston Gainsborough Parking Garage": PARENT_DATA_PATH/"gainsborough_parking_garage.csv"
+}
+
+all_sensor_data = {}
+for name in list(SENSOR_FILE_PATHS.keys()):
+    path = SENSOR_FILE_PATHS[name]
+    sensor_dataframe = pd.read_csv(path)
+
+    temperature_df = _prepare_resampled_series(
+        df = sensor_dataframe,
+        variable_name = "temperature",
+        time_column = "timestamp", 
+        sampling_interval = "1h"
+    ).to_frame()
+
+    all_sensor_data[name] = {
+        "df": temperature_df,
+        "shadows": shadow_data_by_sensor[name].set_index("timestamp").reindex(temperature_df.index)
+    }
+```
+
+
+### Organize the data by season and month
+We'll need to make sure to only consider months where there is enough data. 
+```{python}
+#I think we can divide by season or by month here.
+ALL_SEASON_INTERVALS = {
+    "Spring": (MonthDayClass(day = 1, month = 3), MonthDayClass(day = 31, month = 5)),
+    "Summer": (MonthDayClass(day = 1, month = 6), MonthDayClass(day = 31, month = 8)),
+    "Fall": (MonthDayClass(day = 1, month = 9), MonthDayClass(day = 30, month = 11)),
+    "Winter": (MonthDayClass(day = 1, month = 12), MonthDayClass(day = 29, month = 2))
+}
+
+
+ALL_MONTHS_INTERVALS = {
+    "January": (MonthDayClass(day = 1, month = 1), MonthDayClass(day = 31, month = 1)),
+    "February": (MonthDayClass(day = 1, month = 2), MonthDayClass(day = 28, month = 2)),
+    "March": (MonthDayClass(day = 1, month = 3), MonthDayClass(day = 31, month = 3)),
+    "April": (MonthDayClass(day = 1, month = 4), MonthDayClass(day = 30, month = 4)),
+    "May": (MonthDayClass(day = 1, month = 5), MonthDayClass(day = 31, month = 5) ),
+    "June": (MonthDayClass(day = 1, month = 6), MonthDayClass(day = 30, month = 6)),
+    "July": (MonthDayClass(day = 1, month = 7), MonthDayClass(day = 31, month = 7)),
+    "August": (MonthDayClass(day = 1, month = 8), MonthDayClass(day = 31, month = 8)),
+    "September": (MonthDayClass(day = 1, month = 9), MonthDayClass(day = 30, month = 9)),
+    "October": (MonthDayClass(day = 1, month = 10), MonthDayClass(day = 31, month = 10)),
+    "November": (MonthDayClass(day = 1, month = 11), MonthDayClass(day = 30, month = 11)),
+    "December": (MonthDayClass(day = 1, month = 12), MonthDayClass(day = 31, month = 12))
+}
+
+all_sensor_data_by_season = {}
+SEASON_KEYS = list(ALL_SEASON_INTERVALS.keys())
+MONTH_KEYS = list(ALL_MONTHS_INTERVALS.keys())
+SENSOR_KEYS = list(SENSOR_FILE_PATHS.keys())
+
+
+def is_inside_interval(interval, date):
+    start, end = interval
+    crosses_new_year = (start.month, start.day) > (end.month, end.day)
+    if crosses_new_year:
+        return start.is_bigger_or_equal_than(date) or end.is_less_or_equal_than(date)
+
+    return start.is_bigger_or_equal_than(date) and end.is_less_or_equal_than(date)
+
+
+#Filter the data by season
+#I think we'll need to fit a model per season. But that might depend on how much data we actually have for each season. 
+for i in range(0,len(SEASON_KEYS)):
+    season = SEASON_KEYS[i]
+    season_intervals = ALL_SEASON_INTERVALS[season]
+    all_sensor_data_by_season[season] = {}
+    for j in range(0,len(SENSOR_KEYS)):
+        sensor_name = SENSOR_KEYS[j]
+        all_sensor_data_by_season[season][sensor_name] = {
+            "df": all_sensor_data[sensor_name]["df"][[is_inside_interval(season_intervals, x) for x in list(all_sensor_data[sensor_name]["df"].index)]],
+            "shadows": all_sensor_data[sensor_name]["shadows"][[is_inside_interval(season_intervals, x) for x in list(all_sensor_data[sensor_name]["df"].index)]]
+        }
+
+
+all_sensor_data_by_month = {}
+for i in range(0,len(MONTH_KEYS)):
+    month = MONTH_KEYS[i]
+    month_intervals = ALL_MONTHS_INTERVALS[month]
+
+    all_sensor_data_by_month[month] = {}
+    for j in range(0,len(SENSOR_KEYS)):
+        sensor_name = SENSOR_KEYS[j]
+        all_sensor_data_by_month[month][sensor_name] = {
+            "df": all_sensor_data[sensor_name]["df"][[month_intervals[0].is_bigger_or_equal_than(x) and month_intervals[1].is_less_or_equal_than(x) for x in list(all_sensor_data[sensor_name]["df"].index)]],
+            "shadows": all_sensor_data[sensor_name]["shadows"][[month_intervals[0].is_bigger_or_equal_than(x) and month_intervals[1].is_less_or_equal_than(x) for x in list(all_sensor_data[sensor_name]["df"].index)]]
+            }
+
+#Let's plot the counts per sensor and per season/month
+distribution_plotter = DistributionPlotter()
+
+#Let's organize the data into the dictionaries that we need.
+count_distributions = []
+
+for i in range(0,len(SENSOR_KEYS)):
+    sensor_name = SENSOR_KEYS[i]
+
+    sensor_dictionary = {
+        "x": SEASON_KEYS,
+        "y": [len(list(all_sensor_data_by_season[SEASON_KEYS[i]][sensor_name]["df"]["temperature"].dropna())) for i in range(0,len(SEASON_KEYS))],
+        "color_bars": cmc.batlow(i/(len(SENSOR_KEYS) - 1)),
+        "label": sensor_name
+    }
+
+    count_distributions.append(sensor_dictionary)
+
+ax = distribution_plotter.multi_distribution_plotter(
+    distributions = count_distributions,
+    width = 14,
+    height = 6, 
+    title = "Data counts per season",
+    variable_name = "N", 
+    values_on_top = False,
+    decimals = 0
+)
+```
+
+
+Let's obtain the same plot but per-month
+```{python}
+count_distributions = []
+
+print(len(MONTH_KEYS))
+for i in range(0,len(SENSOR_KEYS)):
+    sensor_name = SENSOR_KEYS[i]
+    sensor_dictionary = {
+        "x":MONTH_KEYS,
+        "y": [len(list(all_sensor_data_by_month[MONTH_KEYS[i]][sensor_name]["df"]["temperature"].dropna())) for i in range(0,len(MONTH_KEYS))],
+        "color_bars": cmc.batlow(i/(len(SENSOR_KEYS) - 1)),
+        "label": sensor_name
+    }
+
+    count_distributions.append(sensor_dictionary)
+
+
+ax = distribution_plotter.multi_distribution_plotter(
+    distributions = count_distributions,
+    width = 16,
+    height = 4,
+    title = "Data counts per month",
+    variable_name = "N",
+    values_on_top = False,
+    decimals = 0
+)
+```
+
+
+### Computing the differences
+```{python}
+
+#Find indices common to both arrays
+def get_included_indices(reference_values, tested_values):
+    n = len(tested_values)
+    included_indices = []
+    filtered_values = []
+
+    for i in range(0,n):
+        tested_value = tested_values[i]
+        if(tested_value in reference_values):
+            filtered_values.append(tested_value)
+            included_indices.append(i)
+        
+    
+    return included_indices, filtered_values
+
+#We pick Boston World Series Way as the reference sensor, because this is the one that was always in the shade.
+
+REFERENCE_SENSOR = "Boston World Series Way"
+ANALYZED_SENSORS = ["Boston Robinson Hall", "Boston Gainsborough Parking Garage"]
+
+
+
+
+def calculate_differences(season_test_dictionary, season_ref_dictionary):
+    #Timestamps are the indices
+    reference_timestamps = set(season_ref_dictionary["df"].index)
+    analyzed_sensor_timestamps = list(season_test_dictionary["df"].index)
+    #Check the time overlap
+    included_indices, filtered_values = get_included_indices(
+        reference_values = reference_timestamps,
+        tested_values = analyzed_sensor_timestamps
+    )
+
+    all_temperature_values = list(season_test_dictionary["df"]["temperature"])
+    temperature_differences = []
+    for i in range(0,len(included_indices)):
+        index = included_indices[i]
+        timestamp = analyzed_sensor_timestamps[index]
+        reference_temperature = season_ref_dictionary["df"].loc[timestamp, "temperature"]
+        temperature = all_temperature_values[index]
+        temperature_delta = temperature - reference_temperature
+        temperature_differences.append(temperature_delta)
+    
+    season_test_dictionary["temperature_diffs"] = temperature_differences
+    season_test_dictionary["diff_timestamps"] = filtered_values
+
+    shadow_values_0m = list(season_test_dictionary["shadows"]["shadow_radius_0m"])
+    filtered_shadows = [shadow_values_0m[index] for index in included_indices]
+    season_test_dictionary["filtered_shadows_0m"] = filtered_shadows
+
+
+
+for season in SEASON_KEYS:
+    reference_dictionary = all_sensor_data_by_season[season][REFERENCE_SENSOR]
+    for i in range(0,len(ANALYZED_SENSORS)):
+        analyzed_sensor_name = ANALYZED_SENSORS[i]
+        analyzed_sensor_dictionary = all_sensor_data_by_season[season][analyzed_sensor_name]
+
+        calculate_differences(
+            season_test_dictionary = analyzed_sensor_dictionary,
+            season_ref_dictionary = reference_dictionary
+        )
+
+for month in MONTH_KEYS:
+    reference_dictionary = all_sensor_data_by_month[month][REFERENCE_SENSOR]
+    for i in range(0,len(ANALYZED_SENSORS)):
+        analyzed_sensor_name = ANALYZED_SENSORS[i]
+        analyzed_sensor_dictionary = all_sensor_data_by_month[month][analyzed_sensor_name]
+        
+        calculate_differences(
+            season_test_dictionary = analyzed_sensor_dictionary,
+            season_ref_dictionary = reference_dictionary
+        )
+
+
+print(all_sensor_data_by_season["Summer"][ANALYZED_SENSORS[0]]["temperature_diffs"])
+```
+
+
+### Splitting days and night hours
+```{python}
+MODEL_RADII = [0,50,100]
+shadow_columns = [f"shadow_radius_{radius}m" for radius in MODEL_RADII]
+
+
+def split_day_and_night(
+        sensor_dictionary
+    ):
+
+    model_df = sensor_dictionary["shadows"].loc[sensor_dictionary["diff_timestamps"], shadow_columns]
+    model_df["temperature_diff"] = sensor_dictionary["temperature_diffs"]
+    model_df = model_df.dropna(subset = ["temperature_diff"])
+    model_df["date"] = model_df.index.tz_localize("UTC").tz_convert("America/New_York").date
+
+    is_day = model_df["shadow_radius_0m"].notna()
+    sensor_dictionary["day_hours"] = model_df[is_day]
+    sensor_dictionary["night_hours"] = model_df[~is_day]
+
+    hour_counts= {
+        "day hours in the sun": int((model_df["shadow_radius_0m"] == 1).sum()),
+        "day hours in the shadow": int((model_df["shadow_radius_0m"] == 0).sum()),
+        "night hours": int((~is_day).sum())
+    }
+
+    sensor_dictionary["hour_counts"] = hour_counts
+
+for i in range(0,len(SEASON_KEYS)):
+    season = SEASON_KEYS[i]
+    for j in range(0,len(ANALYZED_SENSORS)):
+        sensor_name = ANALYZED_SENSORS[j]
+        sensor_dictionary = all_sensor_data_by_season[season][sensor_name]
+        split_day_and_night(
+            sensor_dictionary = sensor_dictionary
+        )
+
+
+
+for i in range(0,len(MONTH_KEYS)):
+    month = MONTH_KEYS[i]
+    for j in range(0,len(ANALYZED_SENSORS)):
+        sensor_name = ANALYZED_SENSORS[j]
+        sensor_dictionary = all_sensor_data_by_month[month][sensor_name]
+        split_day_and_night(
+            sensor_dictionary = sensor_dictionary
+        )
+```
+
+```{python}
+PLOTTED_SENSOR = "Boston Robinson Hall"
+HOUR_TYPE_COLORS = {
+    "day hours in the sun": cmc.batlow(0.85),
+    "day hours in the shadow": cmc.batlow(0.5),
+    "night hours": cmc.batlow(0.15)
+}
+
+hour_count_bars = []
+for hour_type in HOUR_TYPE_COLORS:
+    hour_type_dictionary = {
+        "x": MONTH_KEYS,
+        "y": [all_sensor_data_by_month[month][PLOTTED_SENSOR]["hour_counts"][hour_type] for month in MONTH_KEYS],
+        "color_bars": HOUR_TYPE_COLORS[hour_type],
+        "label": hour_type
+    }
+
+    hour_count_bars.append(hour_type_dictionary)
+
+ax = distribution_plotter.multi_distribution_plotter(
+    distributions = hour_count_bars,
+    width = 16,
+    height = 4,
+    title = f"Hours in the sun, in the shadow and at night per month, {PLOTTED_SENSOR}",
+    variable_name = "Number of hours",
+    values_on_top = False,
+    decimals = 0
+)
+```
+
+
+### Training the models
+
+```{python}
+models_by_season_by_sensor = {}
+models_by_month_by_sensor = {}
+
+
+def get_models_for_dictionary(data_dictionary):
+    models_per_radius = []
+    day_hours_df = data_dictionary["day_hours"]
+    for radius in MODEL_RADII:
+        day_hours_at_radius = day_hours_df.assign(
+            shadow_value = day_hours_df[f"shadow_radius_{radius}m"]
+        )
+        model = smf.ols("temperature_diff ~ shadow_value", data = day_hours_at_radius).fit(
+                cov_type = "cluster", 
+                cov_kwds = {"groups": day_hours_at_radius["date"]}
+            )
+        
+        models_per_radius.append(model)
+    
+    return models_per_radius
+
+
+for i in range(0,len(SEASON_KEYS)):
+    season = SEASON_KEYS[i]
+
+    for j in range(0,len(ANALYZED_SENSORS)):
+        sensor_name = ANALYZED_SENSORS[j]
+        sensor_dictionary = all_sensor_data_by_season[season][sensor_name]
+        models_per_radius = get_models_for_dictionary(
+            data_dictionary = sensor_dictionary
+        )
+
+        all_sensor_data_by_season[season][sensor_name]["models"] = models_per_radius
+
+
+for i in range(0,len(MONTH_KEYS)):
+    month = MONTH_KEYS[i]
+
+    for j in range(0,len(ANALYZED_SENSORS)):
+        sensor_name = ANALYZED_SENSORS[j]
+        sensor_dictionary = all_sensor_data_by_month[month][sensor_name]
+        models_per_radius = get_models_for_dictionary(
+            data_dictionary = sensor_dictionary
+        )
+
+        all_sensor_data_by_month[month][sensor_name]["models"] = models_per_radius
+
+
+
+
+```
+
+### b1 coefficients per season
+```{python}
+# Plotting the b1 coefficients for each season and each radius
+
+def plot_b1_coefficients(sensor_data_by_period, radius_index):
+    period_keys = list(sensor_data_by_period.keys())
+    radius = MODEL_RADII[radius_index]
+    distribution_dictionaries = []
+    for i in range(0,len(ANALYZED_SENSORS)):
+        sensor_name = ANALYZED_SENSORS[i]
+        all_values = []
+        p_values = []
+        for j in range(0,len(period_keys)):
+            period = period_keys[j]
+            sensor_dictionary = sensor_data_by_period[period][sensor_name]
+            all_values.append(sensor_dictionary["models"][radius_index].params.iloc[1])
+            p_values.append(float(sensor_dictionary["models"][radius_index].pvalues.iloc[1]))
+
+        distribution_dictionary = {
+            "x": period_keys,
+            "y": all_values,
+            "color_bars": cmc.batlow(i/(len(SENSOR_KEYS) - 1)),
+            "label": sensor_name
+        }
+
+        distribution_dictionaries.append(distribution_dictionary)
+
+        print(f"P-values of {sensor_name}, radius {radius} m: {p_values}")
+
+    ax = distribution_plotter.multi_distribution_plotter(
+        distributions = distribution_dictionaries,
+        width = 16,
+        height = 4,
+        title = f"b1 coefficients, radius {radius} m",
+        variable_name = "b1",
+        values_on_top = False,
+        decimals = 0
+    )
+
+
+for k in range(0,len(MODEL_RADII)):
+    plot_b1_coefficients(
+        sensor_data_by_period = all_sensor_data_by_season,
+        radius_index = k
+    )
+```
+
+### b1 coefficients per month
+```{python}
+for k in range(0,len(MODEL_RADII)):
+    plot_b1_coefficients(
+        sensor_data_by_period = all_sensor_data_by_month,
+        radius_index = k
+    )
+
+
+
+
+
+```

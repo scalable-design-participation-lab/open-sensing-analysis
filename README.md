@@ -18,3 +18,6 @@ To view the notebooks click on:
 ### 2026-11-13 - Shadow vs. temperature
 * [Shadow vs. temperature — data export](https://scalable-design-participation-lab.github.io/open-sensing-analysis/notebooks/2026_11_13_shadow_temp_correlations/shadow_temp_correlations.html)
 * [Shadow vs. temperature — model](https://scalable-design-participation-lab.github.io/open-sensing-analysis/notebooks/2026_11_13_shadow_temp_correlations/shadow_temp_model.html)
+
+### 2026-11-17 - Shadow model by month and season
+* [Shadow model by month and season](https://scalable-design-participation-lab.github.io/open-sensing-analysis/notebooks/2026_11_17_shadows_umep_correlations_by_month_and_season/shadow_correlations_by_month_and_season.html)
